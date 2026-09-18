@@ -25,7 +25,8 @@ The goal is to learn the business domain while practicing:
 * AWS
 * Observability
 
-The project should gradually evolve from a simple order system into a small **order-to-shipment workflow**.
+The project should gradually evolve from a simple order system into a
+small **order-to-shipment workflow**.
 
 ---
 
@@ -131,7 +132,8 @@ Create:
 
 Document the terminology in your own words.
 
-**Goal:** Be able to explain the warehouse business without mentioning Python or architecture.
+**Goal:** Be able to explain the warehouse business without mentioning
+Python or architecture.
 
 ---
 
@@ -361,7 +363,8 @@ Research:
 
 Think about:
 
-> If an order contains 20 items, how does a warehouse worker actually receive and execute that work?
+> If an order contains 20 items, how does a warehouse worker actually
+> receive and execute that work?
 
 Model a simplified picking workflow.
 
@@ -487,7 +490,8 @@ Adapter Adapter
 
 ### Deliverable
 
-Switching from UPS to FedEx should not require changing the order fulfillment use case.
+Switching from UPS to FedEx should not require changing the order
+fulfillment use case.
 
 ---
 
@@ -945,7 +949,8 @@ Research:
 
 Main question:
 
-> If an order fails somewhere in the fulfillment pipeline, can an engineer understand exactly what happened?
+> If an order fails somewhere in the fulfillment pipeline, can an engineer
+> understand exactly what happened?
 
 ---
 
@@ -955,7 +960,11 @@ Design the complete system without coding.
 
 Scenario:
 
-> A Shopify order is created for a 3PL client. The order contains products stored across three warehouses. The system must allocate inventory, create picking work, allow the warehouse to pack the order into multiple packages, obtain shipping labels from a carrier, update tracking information, and notify the sales channel.
+> A Shopify order is created for a 3PL client. The order contains products
+> stored across three warehouses. The system must allocate inventory, create
+> picking work, allow the warehouse to pack the order into multiple packages,
+> obtain shipping labels from a carrier, update tracking information, and
+> notify the sales channel.
 
 Architecture:
 
