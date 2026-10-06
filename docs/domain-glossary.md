@@ -256,26 +256,20 @@ A valid one satisfies all of these:
 * Each package that ships has a carrier, a shipping service, a label,
   and a tracking number.
 
-### Words that are not the same
+### Logistics & Fulfillment Terminology
 
-**Carrier.** The company that moves the package, such as UPS or FedEx.
+These terms represent distinct steps, entities, and data points in the fulfillment process. It is important not to conflate them.
 
-**Shipping service.** A product that carrier sells, such as ground or
-overnight.
+* **Carrier** — **The company moving the package.** This is the physical logistics provider handling the transport (e.g., `UPS`, `FedEx`, `DHL`).
+* **Shipping Service** — **The specific product sold by the carrier.** This dictates the speed and handling of the delivery (e.g., `Ground`, `Overnight`, `2-Day Air`).
+* **Shipping Method** — **The delivery option shown to the customer.** This is the storefront-facing name (e.g., `Standard Shipping`, `Expedited`). The merchant maps this method to an actual backend *Shipping Service*. For example, a customer selects `Standard` at checkout, while the warehouse fulfills it using `UPS Ground`.
+* **Rate** — **The price quote.** This is the estimated cost provided by the carrier for a specific package and service *before* a shipping label is purchased. 
+* **Label** — **The proof of purchase.** This is the physical or digital barcode sticker bought from the carrier, proving that postage has been paid and authorizing them to move the package.
+* **Shipment** — **The internal warehouse record.** This is the digital entry in the merchant's system confirming that the items have been packed, assigned a tracking number, and have officially left the building.
 
-**Shipping method.** What the merchant offers the customer, such as
-"Standard". It maps to a carrier service. The storefront can say
-Standard while the warehouse buys UPS Ground.
+---
 
-**Rate.** The price a carrier quotes for a package on a service,
-before anyone buys a label.
-
-**Label.** Proof the carrier accepted the request to move the package.
-
-**Shipment.** The warehouse record that the packages left.
-
-Changing UPS for FedEx changes the carrier. It does not change the
-meaning of "ship this order."
+> 💡 **Key Distinction:** Changing the **Carrier** (e.g., switching from UPS to FedEx) alters the external vendor executing the delivery. It does *not* change the internal business logic or the meaning of the command to *"ship this order."*
 
 ## EDI
 
