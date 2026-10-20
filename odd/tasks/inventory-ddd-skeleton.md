@@ -16,7 +16,7 @@ Preserve the documented inventory rules; do not implement the whole roadmap.
 - Route: delegated direct for both tasks; mapping needs 4+ context files,
   implementation needs 2+ non-trivial files. Read-only mapping completed.
 - Baseline: d509545. Feature branch: feat/inventory-ddd-skeleton.
-- Delivery: ask-on-risk. Revised forecast: approximately 470 authored changed lines,
+- Delivery: ask-on-risk. Initial revised forecast: approximately 470 authored changed lines,
   counting rename-aware additions + deletions; generated lockfile excluded.
 - RDD: on by default; assess each committed work unit against last boundary.
 ## Tasks and acceptance
@@ -41,7 +41,7 @@ Preserve the documented inventory rules; do not implement the whole roadmap.
 - Runtime HTTP harness: N/A; no HTTP adapter is in scope. Exercise the application in process.
 - Rollback: remove the new skeleton/config/tests/docs and restore inventory/domain.py from baseline.
 ## Next step
-Both implementation tasks are complete. Commit T2, assess native review from e75be85, then record its exact commit and assessment. No application-branch push or PR authorized.
+Implementation complete. Study the README and inventory read path; allocation remains the next learning exercise. Application child branch is local only; no push/PR/merge authorized.
 
 
 - Delivery update: T1 staged diff is about 324 authored additions/deletions excluding generated uv.lock; Git does not detect the changed module as a rename. Full skeleton exceeds about 400 lines. User accepted feature-branch-chain and requested push; destination/configured SSH identity explicitly authorized for domain branch push. PR/merge not authorized.
@@ -64,4 +64,10 @@ Both implementation tasks are complete. Commit T2, assess native review from e75
 - git diff --check clean. HTTP harness remains N/A: Flask deliberately absent.
 - Source: read port, GetInventory, seeded in-memory adapter; application tests use an independent stub, adapter tests isolate all four identity dimensions. README documents future Flask boundary.
 - Rollback T2: remove its application/adapters modules, three tests and README; keep T1 domain intact.
-- T2 implementation commit/assessment: pending.
+- T2 implementation commit: 2d75f94 on feat/inventory-ddd-skeleton-application. Native assessment e75be85..2d75f94: medium, 229 lines, under_budget; review not due, no approval fabricated.
+
+## Completion and slice boundaries
+- Slice 1: d509545..e75be85, 332 authored + 79 generated lines; approved and pushed domain branch.
+- Slice 2: e75be85..application child HEAD includes 2d75f94 and this verification bookkeeping. Implementation adds 229 authored lines. Child targets domain branch, not tracker/main.
+- Both task outcomes/checks observed. Python 3.11 not executed; no HTTP/concurrency/allocation implementation was promised in this skeleton.
+- Running authored changed lines: 573 (work-unit additions + deletions, generated uv.lock excluded).
