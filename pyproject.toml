@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warehouse-fulfillment-lab"
+version = "0.1.0"
+description = "A domain-first warehouse fulfillment learning lab"
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inventory"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
