@@ -1,13 +1,13 @@
-"""Starter model for inventory balances.
+"""Stock quantities and the rules that keep a balance valid.
 
-This is deliberately incomplete: fill in the TODOs and be ready to explain
+Allocation, picking, packing, and shipping remain learning exercises. Define
 the consistency boundary before connecting this model to a database.
 """
 
 from dataclasses import dataclass, replace
 
-from .errors import InventoryError
-from .key import InventoryKey
+from .inventory_error import InventoryError
+from .inventory_key import InventoryKey
 
 
 @dataclass(frozen=True)

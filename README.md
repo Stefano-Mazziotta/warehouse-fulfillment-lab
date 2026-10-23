@@ -22,21 +22,30 @@ src/inventory/
 tests/inventory/    # Domain, application, infrastructure, and import-boundary tests
 ```
 
-The domain separates stock identity (`domain/key.py`), rule violations
-(`domain/errors.py`), and balance behavior (`domain/balance.py`). Balance rules
-stay together: quantities are nonnegative integers, allocated cannot exceed
+The domain separates stock identity (`domain/inventory_key.py`), rule violations
+(`domain/inventory_error.py`), and balance behavior
+(`domain/inventory_balance.py`). Balance rules stay together: quantities are
+nonnegative integers, allocated cannot exceed
 on hand, and picked cannot exceed allocated. Available is on hand minus
 allocated. Receiving increases on hand without changing reservations.
 
-The application orchestrates a read through `GetInventory`. It owns the
-`InventoryRepository` port and the `InventoryNotFound` error: absence is a
+Module names follow their class names in snake_case: `InventoryBalance` lives
+in `inventory_balance.py`. Start with the class that names the business concept
+you want to understand.
+
+The application orchestrates a read through `GetInventory`
+(`application/get_inventory.py`). It owns the
+`InventoryRepository` port (`application/inventory_repository.py`) and the
+`InventoryNotFound` error (`application/inventory_not_found.py`): absence is a
 use-case outcome, not an invalid stock state. Infrastructure supplies the
 in-memory adapter, which satisfies the port structurally without inheriting
 from its Protocol. Domain imports no other layer; application imports domain;
 infrastructure may depend on the inner layers.
 
 ```python
-from inventory.infrastructure.in_memory import InMemoryInventoryRepository
+from inventory.infrastructure.in_memory_inventory_repository import (
+    InMemoryInventoryRepository,
+)
 from inventory.application.get_inventory import GetInventory
 from inventory.domain import InventoryBalance, InventoryKey
 
