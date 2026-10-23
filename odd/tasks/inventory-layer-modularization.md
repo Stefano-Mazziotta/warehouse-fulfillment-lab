@@ -6,7 +6,7 @@ Preserve all business behavior and unfinished learning exercises; no infrastruct
 
 ## Plan and constraints
 - [x] T1: Extract domain identity/errors and application errors; rename adapters to infrastructure; update imports, architecture checks and README; verify and commit.
-- [ ] T2: Use class-corresponding snake_case module names, clarify class responsibilities, update imports and README; verify and commit. Authorized by follow-up request for clean-code readability.
+- [x] T2: Use class-corresponding snake_case module names, clarify class responsibilities, update imports and README; verify and commit. Authorized by follow-up request for clean-code readability.
 - T2 route: delegated writer; mapping/preparation spans 4+ files and six non-trivial modules. Preserve T1 evidence and behavior.
 - Route: delegated direct. Mapping/preparation requires 4+ files; writer touches multiple non-trivial files. Read-only mapping completed.
 - Keep invariants and stock operations in InventoryBalance; avoid artificial rules services.
@@ -33,4 +33,6 @@ Preserve all business behavior and unfinished learning exercises; no infrastruct
 - T2 smoke: all renamed modules import, domain facade class identities match, successful read and missing read pass. No stale active module paths found; diff check clean.
 - T2 authored source/test/README change: approximately 46 lines with rename detection, before final line wrapping. No rule behavior changes.
 - T2 rollback: revert its six module renames, dependent imports, class descriptions and README updates; T1 layers remain intact.
-- Next: commit T2 and assess against b2ccc0f (pending slice boundary).
+- T2 commit: 52610a3; 64 authored additions/deletions including task updates with rename detection. Running work-unit count: 182 (112 T1 + 6 evidence + 64 T2). Parent final pytest: 39 passed in 0.05s; diff check clean.
+- Native accumulated slice assessment b2ccc0f..52610a3: medium, 358 lines, under_budget, review_due=false. Native rename accounting differs from Git work-unit count. No review approval claimed.
+- Next: learner reads explicit modules then resumes allocation exercise. No pending implementation; native slice remains under budget.
