@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from inventory.adapters.in_memory import InMemoryInventoryRepository
+from inventory.infrastructure.in_memory import InMemoryInventoryRepository
 from inventory.domain import InventoryBalance, InventoryKey
 
 

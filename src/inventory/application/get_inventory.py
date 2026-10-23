@@ -2,11 +2,8 @@
 
 from inventory.domain import InventoryBalance, InventoryKey
 
+from .errors import InventoryNotFound
 from .ports import InventoryRepository
-
-
-class InventoryNotFound(LookupError):
-    """No balance exists for the requested stock identity."""
 
 
 class GetInventory:

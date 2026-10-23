@@ -18,17 +18,25 @@ uv run pytest
 src/inventory/
     domain/         # Stock identity, immutable balances, inventory rules
     application/    # GetInventory and its read repository Protocol
-    adapters/       # InMemoryInventoryRepository
-tests/inventory/    # Domain, application, adapter, and import-boundary tests
+    infrastructure/ # InMemoryInventoryRepository
+tests/inventory/    # Domain, application, infrastructure, and import-boundary tests
 ```
 
-The application owns its persistence port. The in-memory adapter implements it
-structurally; it does not need to inherit from the Protocol. Domain code knows
-neither layer. This keeps the business capability visible instead of hiding it
-inside global controllers/services/models directories.
+The domain separates stock identity (`domain/key.py`), rule violations
+(`domain/errors.py`), and balance behavior (`domain/balance.py`). Balance rules
+stay together: quantities are nonnegative integers, allocated cannot exceed
+on hand, and picked cannot exceed allocated. Available is on hand minus
+allocated. Receiving increases on hand without changing reservations.
+
+The application orchestrates a read through `GetInventory`. It owns the
+`InventoryRepository` port and the `InventoryNotFound` error: absence is a
+use-case outcome, not an invalid stock state. Infrastructure supplies the
+in-memory adapter, which satisfies the port structurally without inheriting
+from its Protocol. Domain imports no other layer; application imports domain;
+infrastructure may depend on the inner layers.
 
 ```python
-from inventory.adapters.in_memory import InMemoryInventoryRepository
+from inventory.infrastructure.in_memory import InMemoryInventoryRepository
 from inventory.application.get_inventory import GetInventory
 from inventory.domain import InventoryBalance, InventoryKey
 
