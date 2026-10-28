@@ -53,6 +53,8 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - T1b runtime: lab PostgreSQL healthy on127.0.0.1:55432; Alembic initial migration applied. Container intentionally remains running; `docker compose -p warehouse-fulfillment-lab down` preserves its volume. HTTP harness N/A: no API adapter yet.
 - T1b rollback: against disposable lab DB only, downgrade migration then revert application transaction, PostgreSQL schema/adapters, tests/dependencies/Compose/runtime docs. Domain allocation remains intact.
 - T1b delivery: feat/local-fulfillment-lab-postgres targets feat/local-fulfillment-lab-allocation. Natural coherent DB slice exceeds400 authored lines (tests/migration/rollback/runtime all retained); no code compression. No PR created; recommend size:exception or schema/runtime vs transaction slices before any future PR. Native review disabled/unmanaged.
+- T1b final staged count:682 authored additions/deletions plus373 generated lockfile lines; running852 authored lines including tracker/T1a. Unit-only invocation observed60 passed,7 explicitly skipped; configured full67 passed is the concurrency proof.
+- T1b work-unit commitbc24c3b; branch feat/local-fulfillment-lab-postgres. Local chain:80b8e59 tracker ->883de37 domain ->bc24c3b persistence. No push/PR/merge.
 - T2 preparation: do not loop single-balance allocation calls. New transaction must lock order, normalize repeated demand, lock balances in sorted full-key order and persist reservations/order/stock together. Location selection ascending location ID with split across locations within selected warehouse; cancellation cutoff is startPicking; shipment attempt covers all order packages.
 
 ## Next action
