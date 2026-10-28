@@ -4,7 +4,8 @@ import uuid
 from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import HTTPException
 
-REQUEST_ID_HEADER = "X-Request-ID"
+from observability.log_context import current_log_fields
+
 INTERNAL_MESSAGE = "Internal server error"
 
 _log = logging.getLogger("api.errors")
@@ -37,7 +38,6 @@ def register_json_errors(app: Flask) -> None:
         for name, value in error.get_headers():
             if name.lower() not in {"content-type", "content-length"}:
                 response.headers[name] = value
-        response.headers[REQUEST_ID_HEADER] = request_id
         return response
 
     @app.errorhandler(Exception)
@@ -49,9 +49,10 @@ def register_json_errors(app: Flask) -> None:
         response = jsonify(error={
             "code": "INTERNAL", "message": INTERNAL_MESSAGE, "requestId": request_id})
         response.status_code = 500
-        response.headers[REQUEST_ID_HEADER] = request_id
         return response
 
 
 def _request_id() -> str:
-    return request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
+    # RequestIdMiddleware owns the id (validated, echoed in the response header, bound to
+    # every log line); the envelope only reports it.
+    return current_log_fields().get("request_id") or uuid.uuid4().hex

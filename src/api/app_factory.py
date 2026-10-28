@@ -3,11 +3,14 @@ import os
 from flask import Flask
 from sqlalchemy import Engine, create_engine
 
+from observability.configure_logging import configure_logging
+
 from .api_services import ApiServices
 from .app_config import AppConfig
 from .graphql.graphql_view import create_graphql_view
 from .graphql.schema_factory import build_schema
 from .json_errors import register_json_errors
+from .request_id_middleware import RequestIdMiddleware
 from .rest.health_blueprint import create_health_blueprint
 from .rest.webhook_blueprint import create_webhook_blueprint
 from .service_composition import compose_services
@@ -30,6 +33,7 @@ def create_app(
     app.json.sort_keys = False
     app.config["MAX_CONTENT_LENGTH"] = config.max_request_bytes
     register_json_errors(app)
+    app.wsgi_app = RequestIdMiddleware(app.wsgi_app)
     app.add_url_rule(
         "/graphql",
         view_func=create_graphql_view(build_schema(config), services, config),
@@ -40,4 +44,5 @@ def create_app(
 
 
 def create_app_from_environment() -> Flask:
+    configure_logging(level=os.environ.get("LAB_LOG_LEVEL", "INFO"))
     return create_app(AppConfig.from_environment(os.environ))
