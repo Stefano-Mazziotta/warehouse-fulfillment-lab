@@ -80,7 +80,7 @@ uv run alembic upgrade head
 LAB_TEST_DATABASE_URL="$LAB_DATABASE_URL" uv run pytest
 ```
 
-Without `LAB_TEST_DATABASE_URL`, seven PostgreSQL tests explicitly skip. A green
+Without `LAB_TEST_DATABASE_URL`, PostgreSQL tests explicitly skip. A green
 unit-only run is NOT proof of database concurrency safety. Integration tests
 create and drop only randomly named `lab_test_<uuid>` schemas in the supplied
 PostgreSQL database; point them only at a disposable local lab database.
@@ -108,10 +108,44 @@ Stop only the lab with `docker compose -p warehouse-fulfillment-lab down`.
 This preserves its data volume. `uv run alembic downgrade base` removes the lab
 inventory table and all its balances: use only against this disposable database.
 
-## Next learning exercise
+## Order-owned allocation and cancellation
 
-Single-balance allocation is not order allocation: the next slice must reserve
-all required balances and transition an order in ONE transaction, with explicit
-reservation ownership and deterministic lock order. Repeated calls currently
-reserve again; this is not an idempotent order endpoint. Picking, packing and
-shipping still require their own business models.
+Orders now own reservations across multiple balances in one warehouse. Create,
+read, allocate and cancel through application use cases; no HTTP endpoint exists
+in this slice. New orders must be CREATED. Inventory is still seeded explicitly.
+
+```python
+from orders.application.create_order import CreateOrder
+from orders.application.get_order import GetOrder
+from orders.application.allocate_order import AllocateOrder
+from orders.application.cancel_order import CancelOrder
+from orders.domain import Order, OrderKey, OrderLine
+from orders.infrastructure.postgres_order_transaction import PostgresOrderTransaction
+
+transaction = lambda: PostgresOrderTransaction(engine)
+order_key = OrderKey("client-a", "order-1")
+create = CreateOrder(transaction)
+create.execute(Order(order_key, "warehouse-1", (OrderLine("1", "SKU-123", 2),)))
+# With two available units seeded for this owner/warehouse:
+# AllocateOrder(transaction).execute(order_key)
+# CancelOrder(transaction).execute(order_key)
+assert GetOrder(transaction).execute(order_key).key == order_key
+```
+
+Use a live `engine` as in the PostgreSQL setup above (before `engine.dispose()`).
+Run `uv run alembic upgrade head` to install the order migration. The application
+locks order then candidate stock in sorted SKU/location order; reservation rows,
+stock and state commit together. Identical create retries return the existing
+order; conflicting payloads fail. Repeated allocation/cancellation are no-ops.
+Cancellation retains historical reservation rows, inactive through CANCELLED
+order state, and releases only this order's stock.
+
+Read [the allocation walkthrough](docs/study/order-allocation.md) and
+[the transaction decision](docs/decisions/order-transaction.md). Migration rollback
+`uv run alembic downgrade 0001_inventory` removes orders, lines and reservations;
+it does not undo allocations in inventory. Use it only in disposable schemas,
+or reconcile reservations/stock before any destructive operational downgrade.
+
+The earlier single-balance `AllocateInventory` remains a low-level,
+non-idempotent exercise, not the order allocation path. Next: partial picking
+and its cancellation cutoff; packages and shipping are not implemented yet.
