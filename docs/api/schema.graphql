@@ -1,0 +1,211 @@
+input AddPackageInput {
+  orderId: String!
+  packageId: String!
+  weightGrams: Int!
+  lengthMm: Int!
+  widthMm: Int!
+  heightMm: Int!
+  contents: [PackageContentInput!]!
+}
+
+type AddPackagePayload {
+  package: Package!
+}
+
+input CreateOrderInput {
+  orderId: String!
+  warehouseId: String!
+  lines: [OrderLineInput!]!
+}
+
+type InventoryBalance {
+  sku: String!
+  warehouseId: String!
+  locationId: String!
+  onHand: Int!
+  allocated: Int!
+  picked: Int!
+  available: Int!
+}
+
+type Mutation {
+  """
+  Idempotent: repeating the identical order returns it; a different payload under the same order ID is a CONFLICT.
+  """
+  createOrder(input: CreateOrderInput!): OrderPayload!
+
+  """
+  Reserve stock for every line or nothing. Idempotent: an allocated order stays as it is.
+  """
+  allocateInventory(orderId: String!): OrderPayload!
+
+  """
+  Allowed before picking starts; releases only unpicked stock. Idempotent.
+  """
+  cancelOrder(orderId: String!): OrderPayload!
+
+  """
+  ALLOCATED to PICKING. Idempotent; cancellation is no longer possible afterwards.
+  """
+  startPicking(orderId: String!): OrderPayload!
+
+  """
+  Sets the cumulative picked quantity of one reservation. Idempotent: the same target is a no-op and a lower one is a CONFLICT.
+  """
+  recordPick(input: RecordPickInput!): RecordPickPayload!
+
+  """PICKING to PICKED once every reservation is fully picked. Idempotent."""
+  completePicking(orderId: String!): OrderPayload!
+
+  """
+  Adds one immutable package to a PICKED order. Idempotent: an identical retry returns the stored package; the same ID with another payload is a CONFLICT.
+  """
+  addPackage(input: AddPackageInput!): AddPackagePayload!
+
+  """
+  PICKED to PACKED once packages exactly cover every picked reservation. Idempotent.
+  """
+  finishPacking(orderId: String!): OrderPayload!
+
+  """
+  Commits one shipping attempt, then asks the carrier. Idempotent: an uncertain carrier answer leaves status UNKNOWN and never creates a second shipment.
+  """
+  shipOrder(orderId: String!): ShipmentPayload!
+
+  """Settles an open attempt by asking the carrier first. Idempotent."""
+  reconcileShipment(orderId: String!): ShipmentPayload!
+}
+
+type Order {
+  orderId: String!
+  warehouseId: String!
+  status: OrderStatus!
+  lines: [OrderLine!]!
+  reservations: [Reservation!]!
+  packages: [Package!]!
+  shipment: ShipmentAttempt
+}
+
+type OrderConnection {
+  nodes: [Order!]!
+  pageInfo: PageInfo!
+}
+
+type OrderLine {
+  lineId: String!
+  sku: String!
+  quantity: Int!
+}
+
+input OrderLineInput {
+  lineId: String!
+  sku: String!
+  quantity: Int!
+}
+
+type OrderPayload {
+  order: Order!
+}
+
+enum OrderStatus {
+  CREATED
+  ALLOCATED
+  PICKING
+  PICKED
+  PACKED
+  SHIPPED
+  CANCELLED
+}
+
+type Package {
+  packageId: String!
+  weightGrams: Int!
+  lengthMm: Int!
+  widthMm: Int!
+  heightMm: Int!
+  contents: [PackageContent!]!
+}
+
+type PackageContent {
+  lineId: String!
+  sku: String!
+  warehouseId: String!
+  locationId: String!
+  quantity: Int!
+}
+
+input PackageContentInput {
+  lineId: String!
+  stock: StockLocationInput!
+  quantity: Int!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type Query {
+  """One order of the calling client; NOT_FOUND for anyone else's."""
+  order(orderId: String!): Order
+
+  """
+  Keyset-paginated orders of the calling client, ascending by order ID. `first` defaults to the configured page size and is capped at the configured maximum.
+  """
+  orders(first: Int = null, after: String = null): OrderConnection!
+
+  """Stock of the calling client at one location; NOT_FOUND otherwise."""
+  inventoryBalance(sku: String!, warehouseId: String!, locationId: String!): InventoryBalance
+}
+
+input RecordPickInput {
+  orderId: String!
+  lineId: String!
+  stock: StockLocationInput!
+
+  """
+  Cumulative total picked from this reservation, not a delta, so retries are safe.
+  """
+  pickedQuantity: Int!
+}
+
+type RecordPickPayload {
+  reservation: Reservation!
+}
+
+"""Stock held for one order line at one location."""
+type Reservation {
+  lineId: String!
+  sku: String!
+  warehouseId: String!
+  locationId: String!
+  quantity: Int!
+  pickedQuantity: Int!
+}
+
+"""
+UNKNOWN means the carrier did not answer; run reconcileShipment to settle it.
+"""
+type ShipmentAttempt {
+  attemptId: String!
+  status: ShipmentStatus!
+  trackingNumber: String
+  packageIds: [String!]!
+}
+
+type ShipmentPayload {
+  shipment: ShipmentAttempt!
+}
+
+enum ShipmentStatus {
+  PENDING
+  UNKNOWN
+  SHIPPED
+}
+
+"""Where stock sits; the owner is always the caller."""
+input StockLocationInput {
+  sku: String!
+  warehouseId: String!
+  locationId: String!
+}

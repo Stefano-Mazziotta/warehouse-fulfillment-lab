@@ -65,7 +65,7 @@ jointly identify a balance in this provisional lab model.
 A future Flask adapter can translate HTTP parameters into `InventoryKey`, call
 the injected `get_inventory.execute(key)`, serialize the result, and translate
 `InventoryNotFound` to HTTP 404. Wire the repository and use case at startup
-as above, not inside the domain. Flask is deliberately not installed yet.
+as above, not inside the domain. The GraphQL API section below does exactly this.
 
 ## Run transactional allocation with PostgreSQL
 
@@ -227,3 +227,29 @@ is the source of truth; `ReceiveChannelEvent` feeds webhook-style events and
 checkpoint advances only after a page is durably processed, the first page re-reads an
 overlap window, and a row lock serializes concurrent reconcilers. No HTTP or broker is
 wired yet. See [the reconciliation walkthrough](docs/study/reconciliation.md).
+
+## GraphQL API (Flask host)
+
+`src/api/` is the composition root and a thin adapter: `create_app(config)` builds the
+engine, transaction factories and use cases, then hosts GraphQL at `POST /graphql` plus two
+REST routes, `GET /health` and `POST /webhooks/sales-channel`. Domain and application code
+never import Flask or Strawberry (architecture tests enforce it).
+
+```sh
+docker compose -p warehouse-fulfillment-lab up -d --wait postgres
+export LAB_DATABASE_URL=postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab
+uv run alembic upgrade head
+uv run flask --app 'api.app_factory:create_app_from_environment' run --port 5000
+```
+
+```sh
+curl -s localhost:5000/health
+curl -s localhost:5000/graphql -H 'Content-Type: application/json' -H 'X-Client-Id: client-a' \
+  -d '{"query":"{ orders(first: 5) { nodes { orderId status lines { sku quantity } } pageInfo { hasNextPage endCursor } } }"}'
+```
+
+Every GraphQL request needs `X-Client-Id`; it scopes everything to that owner and is only a
+stand-in for authentication. Inventory is still seeded directly in SQL. The committed
+contract is `docs/api/schema.graphql`; regenerate it after an intentional change with
+`uv run python scripts/export_graphql_schema.py`. See
+[the API study note](docs/study/graphql-api.md).
