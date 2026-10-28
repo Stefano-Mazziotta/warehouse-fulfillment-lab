@@ -20,6 +20,14 @@ def drain_messaging():
 
 
 @pytest.fixture
+def valkey_url():
+    url = os.environ.get("LAB_TEST_VALKEY_URL")
+    if not url:
+        pytest.skip("set LAB_TEST_VALKEY_URL for real Valkey proofs")
+    return url
+
+
+@pytest.fixture
 def orders_database():
     url = os.environ.get("LAB_TEST_DATABASE_URL")
     if not url:

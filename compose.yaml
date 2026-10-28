@@ -31,6 +31,18 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    pull_policy: never
+    # A cache, not a database: no persistence, so a restart is also an outage drill.
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
 volumes:
   postgres-data:
   rabbitmq-data:

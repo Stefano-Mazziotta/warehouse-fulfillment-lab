@@ -14,6 +14,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "sqlalchemy>=2.0,<2.1",
     "strawberry-graphql>=0.280,<1",
+    "valkey>=6,<7",
 ]
 
 [dependency-groups]
