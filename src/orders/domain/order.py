@@ -4,6 +4,7 @@ from .order_error import OrderError
 from .order_key import OrderKey
 from .order_line import OrderLine
 from .order_status import OrderStatus
+from .reservation import Reservation
 
 
 @dataclass(frozen=True)
@@ -45,3 +46,40 @@ class Order:
         if self.status not in (OrderStatus.CREATED, OrderStatus.ALLOCATED):
             raise OrderError("Cancellation is only allowed before picking")
         return replace(self, status=OrderStatus.CANCELLED)
+
+    def start_picking(self) -> "Order":
+        """Make the cancellation cutoff explicit."""
+        if self.status == OrderStatus.PICKING:
+            return self
+        if self.status != OrderStatus.ALLOCATED:
+            raise OrderError("Only ALLOCATED orders can start picking")
+        return replace(self, status=OrderStatus.PICKING)
+
+    def require_picking(self) -> None:
+        if self.status != OrderStatus.PICKING:
+            raise OrderError("Order must be PICKING")
+
+    def complete_picking(self, reservations: tuple[Reservation, ...]) -> "Order":
+        if self.status == OrderStatus.PICKED:
+            return self
+        self.require_picking()
+        totals: dict[str, int] = {}
+        identities = set()
+        lines = {line.line_id: line for line in self.lines}
+        for reservation in reservations:
+            line = lines.get(reservation.line_id)
+            identity = (reservation.line_id, reservation.stock_key)
+            if (
+                reservation.order_key != self.key
+                or reservation.stock_key.warehouse_id != self.warehouse_id
+                or line is None
+                or reservation.stock_key.sku != line.sku
+                or identity in identities
+                or reservation.picked_quantity != reservation.quantity
+            ):
+                raise OrderError("Every owned reservation must be fully picked")
+            identities.add(identity)
+            totals[reservation.line_id] = totals.get(reservation.line_id, 0) + reservation.quantity
+        if totals != {line.line_id: line.quantity for line in self.lines}:
+            raise OrderError("Picked reservations must exactly cover every order line")
+        return replace(self, status=OrderStatus.PICKED)

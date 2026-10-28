@@ -181,6 +181,7 @@ class PostgresOrderTransaction:
                     row["location_id"],
                 ),
                 row["quantity"],
+                row["picked_quantity"],
             )
             for row in rows
         )
@@ -200,8 +201,32 @@ class PostgresOrderTransaction:
             sku=key.sku,
             location_id=key.location_id,
             quantity=reservation.quantity,
+            picked_quantity=reservation.picked_quantity,
         )
         self._connection().execute(statement)
+
+    def save_reservation(self, reservation: Reservation) -> None:
+        if (
+            reservation.order_key not in self._locked_orders
+            or reservation.stock_key not in self._locked_stock
+        ):
+            raise RuntimeError("Order and stock must be locked before picking")
+        key = reservation.stock_key
+        statement = (
+            update(reservations)
+            .where(
+                order_identity(reservations, reservation.order_key),
+                reservations.c.line_id == reservation.line_id,
+                reservations.c.client_id == key.client_id,
+                reservations.c.sku == key.sku,
+                reservations.c.warehouse_id == key.warehouse_id,
+                reservations.c.location_id == key.location_id,
+            )
+            .values(picked_quantity=reservation.picked_quantity)
+            .returning(reservations.c.line_id)
+        )
+        if self._connection().execute(statement).scalar_one_or_none() is None:
+            raise OrderError("Reservation is missing")
 
     def save_order(self, order: Order) -> None:
         if order.key not in self._locked_orders:
