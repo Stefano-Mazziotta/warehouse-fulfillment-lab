@@ -27,7 +27,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T2c | T2b | picking proofs pass | delegated: packages and reconciliation | packing writer | packages and related persistence/tests | exact packing totals, no cross-order contents | [x] |
 | T2d | T2c | packages reconcile | delegated: shipping integration boundary | shipping writer | shipment attempts/fake carrier and tests | unknown outcome recovery, stock decremented once | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
-| T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask/GraphQL API and API tests | business endpoints, pagination/query limits/batching counts | [ ] |
+| T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask-hosted GraphQL API and API tests | business mutations, pagination/query limits/batching counts; REST only for inbound webhooks/health | [ ] |
 | T4b | T4a | API proof passes | delegated: adapters and diagnostics | infrastructure worker | cache/projection/telemetry + tests | Valkey outage, DynamoDB projection, local error capture, EDI fixtures | [ ] |
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
@@ -39,6 +39,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
+- API decision (user): GraphQL first; REST only when a feature needs it (inbound webhooks, health). Flask is the host and composition root (`create_app`), a thin adapter: resolvers/routes parse input, call one use case, map errors (OrderNotFound->not found, OrderError->conflict) in one place. Per-capability adapters/api folders, DTOs at the edge, no domain objects serialized directly, no flask/strawberry imports in domain/application (extend architecture tests). Mutations accept idempotent inputs.
 - API/worker share application use cases; domain/application never import Flask, SQLAlchemy, messaging or cache libraries.
 - PostgreSQL is authoritative; cache/projections cannot authorize allocations. Broker delivery is not exactly-once business execution.
 
