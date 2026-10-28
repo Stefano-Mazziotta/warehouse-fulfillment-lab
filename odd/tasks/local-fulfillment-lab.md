@@ -19,7 +19,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 ## Task ownership and dependencies
 | ID | Depends | Ready when | Route | Owner | Exclusive files | Validation | Status |
 |---|---|---|---|---|---|---|---|
-| T1a | — | baseline verified | delegated: domain/tests/docs | allocation worker | inventory domain + domain tests, allocation study note | invalid/insufficient/repeated allocation, unchanged original | [ ] |
+| T1a | — | baseline verified | delegated: domain/tests/docs | allocation worker | inventory domain + domain tests, allocation study note | invalid/insufficient/repeated allocation, unchanged original | [x] |
 | T1b | T1a | domain proofs pass | delegated: persistence/config | persistence worker | inventory application/infrastructure, migrations, Compose, pyproject, integration tests | real PostgreSQL concurrent last-unit + rollback/isolation/migrations | [ ] |
 | T2 | T1b | concurrency proof passes | delegated: multiple capabilities | fulfillment worker | orders/picking/packing/shipping and related tests | valid/invalid transitions, quantity reconciliation, carrier unknown outcome | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
@@ -28,10 +28,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
-- T1a: domain allocation tests and behavior. Mapping uses current CodeGraph (functional).
+- T1b: transactional allocation use case and PostgreSQL proof. T1a passed domain tests.
 
 ## Blocked
-- T1b waits on T1a; T2 waits on T1b; T3 waits on T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
+- T2 waits on T1b; T3 waits on T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
@@ -43,7 +43,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - Host5432 belongs to another project; lab uses loopback55432 after availability check. Never reuse unrelated database/container.
 - HTTP harness initially N/A (no HTTP adapter); T1 runtime proof is PostgreSQL integration.
 - Per-task closure records observed tests, commit, authored line count, rollback and native review disabled/unmanaged.
-- Initial Engram mirror pending synchronization.
+- Initial Engram mirror synchronized and read back, observation1739.
+- T1a RED:13 allocation tests failed with NotImplementedError; GREEN:52 passed. Parent independently reran52 passed; diff check clean. Validates exact positive integer, insufficient stock, original preservation and repeated reservations.
+- T1a rollback: revert allocation method, its13 tests and docs/study/inventory-allocation.md. HTTP harness N/A: pure domain slice. Native review disabled/unmanaged.
+- Host55432 confirmed free; cached PostgreSQL16-alpine image confirmed. No other container touched.
 
 ## Next action
 Complete bounded T1a, then T1b with real concurrent PostgreSQL transactions. Do not mark later milestones complete from scaffolding or skipped tests.

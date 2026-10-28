@@ -1,7 +1,7 @@
 """Stock quantities and the rules that keep a balance valid.
 
-Allocation, picking, packing, and shipping remain learning exercises. Define
-the consistency boundary before connecting this model to a database.
+Receiving and allocation enforce snapshot-level stock rules. Picking, packing,
+and shipping remain learning exercises. Persistence must protect concurrent updates.
 """
 
 from dataclasses import dataclass, replace
@@ -53,13 +53,16 @@ class InventoryBalance:
         return replace(self, on_hand=self.on_hand + quantity)
 
     def allocate(self, quantity: int) -> "InventoryBalance":
-        """Reserve stock for an order.
+        """Return a new reservation snapshot within available stock.
 
-        Hint: what must be true before increasing allocated? The check and
-        update must be atomic at the persistence boundary. A FIFO queue alone
-        does not guarantee this if multiple consumers can process concurrently.
+        Persistence must make the availability check and saved update atomic
+        across concurrent callers; this immutable snapshot alone cannot do so.
         """
-        raise NotImplementedError
+        if type(quantity) is not int or quantity <= 0:
+            raise InventoryError("allocated quantity must be a positive integer")
+        if quantity > self.available:
+            raise InventoryError("allocated quantity cannot exceed available stock")
+        return replace(self, allocated=self.allocated + quantity)
 
     def pick(self, quantity: int) -> "InventoryBalance":
         """Record units physically picked for allocated work.
