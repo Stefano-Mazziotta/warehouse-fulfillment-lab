@@ -211,6 +211,6 @@ def test_migration_refuses_information_loss_and_locks_all_tables(orders_database
         event.remove(engine, "after_cursor_execute", capture)
     assert lock_snapshots and {"orders", "order_reservations", "packages", "package_items"} <= lock_snapshots[0]
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0006_messaging"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0007_integrations"
     assert len(saved(engine)) == (1 if existing == "package" else 0)
 
