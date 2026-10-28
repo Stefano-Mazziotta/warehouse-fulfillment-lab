@@ -49,6 +49,10 @@ count and is untouched.
   NOT_FOUND; treating "unreachable" as NOT_FOUND would create duplicates.
 - **Commit before calling** costs one extra transaction and creates a visible
   `PENDING` state, but it is what makes crash recovery possible.
+- **`ShipOrder` returns an `UNKNOWN` attempt instead of raising.** An uncertain
+  carrier answer is a valid, persisted state rather than an error, so callers must
+  inspect `attempt.status` and retry through `ReconcileShipment` (or `ShipOrder`
+  again); the price is that "no exception" does not mean "shipped".
 - **Order-level receipt only**: no partial shipments, returns or label purchase.
 - Application-level immutability of the payload; arbitrary SQL can bypass it.
 
