@@ -187,3 +187,15 @@ same attempt ID only on an authoritative NOT_FOUND. Finalization decrements
 on-hand, allocated and picked stock once and moves the order to `SHIPPED`.
 The fake carrier (`PostgresFakeCarrier`) is the only adapter; no network or real
 carrier is involved. See [the shipping walkthrough](docs/study/shipping.md).
+
+## Reliable events with an outbox
+
+Migration `0006_messaging` adds `outbox_messages` and `inbox_messages`. Order
+allocation and cancellation, picking completion, packing completion and shipment
+write their event in the same PostgreSQL transaction as the state change. An
+`OutboxRelay` claims due rows with `FOR UPDATE SKIP LOCKED`, publishes through a
+`MessagePublisher` port, retries with bounded exponential backoff and marks rows
+`DEAD` after the limit. `IdempotentConsumer` records the inbox row and the handler's
+effects together, so redelivery is harmless. Delivery is at-least-once and ordering is
+not guaranteed. There is no broker adapter yet; `InMemoryPublisher` is the only
+publisher. See [the messaging walkthrough](docs/study/messaging.md).
