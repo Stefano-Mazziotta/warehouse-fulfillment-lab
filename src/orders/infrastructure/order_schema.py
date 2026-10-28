@@ -21,7 +21,7 @@ orders = Table(
     Column("status", Text, nullable=False),
     UniqueConstraint("client_id", "order_id", "warehouse_id"),
     CheckConstraint(
-        "status IN ('CREATED', 'ALLOCATED', 'PICKING', 'PICKED', 'CANCELLED')",
+        "status IN ('CREATED', 'ALLOCATED', 'PICKING', 'PICKED', 'PACKED', 'CANCELLED')",
         name="valid_order_status",
     ),
 )
@@ -54,6 +54,15 @@ reservations = Table(
     Column("sku", Text, nullable=False),
     Column("quantity", Integer, nullable=False),
     Column("picked_quantity", Integer, nullable=False, server_default="0"),
+    UniqueConstraint(
+        "client_id",
+        "order_id",
+        "line_id",
+        "warehouse_id",
+        "sku",
+        "location_id",
+        name="reservation_full_identity",
+    ),
     CheckConstraint("picked_quantity >= 0 AND picked_quantity <= quantity",
                     name="valid_picked_quantity"),
     CheckConstraint("quantity > 0", name="positive_reservation_quantity"),

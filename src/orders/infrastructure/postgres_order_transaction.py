@@ -14,6 +14,10 @@ from inventory.infrastructure.inventory_schema import (
 )
 from orders.domain import Order, OrderError, OrderKey, OrderLine, OrderStatus, Reservation
 
+from packing.domain.package import Package
+from packing.domain.package_item import PackageItem
+from packing.infrastructure.packing_schema import packages, package_items
+
 from .order_schema import order_lines, orders, reservations
 
 
@@ -237,3 +241,32 @@ class PostgresOrderTransaction:
             .values(status=order.status.value)
         )
         self._connection().execute(statement)
+
+    def get_packages(self, key: OrderKey) -> tuple[Package, ...]:
+        headers = self._connection().execute(
+            select(packages).where(order_identity(packages, key))
+            .order_by(packages.c.package_id)).mappings()
+        contents = self._connection().execute(
+            select(package_items).where(order_identity(package_items, key))).mappings()
+        by_package: dict[str, list[PackageItem]] = {}
+        for row in contents:
+            by_package.setdefault(row["package_id"], []).append(PackageItem(
+                key, row["line_id"], InventoryKey(row["client_id"], row["sku"],
+                row["warehouse_id"], row["location_id"]), row["quantity"]))
+        return tuple(Package(key, row["package_id"], row["weight_grams"], row["length_mm"],
+                             row["width_mm"], row["height_mm"],
+                             tuple(by_package.get(row["package_id"], ()))) for row in headers)
+
+    def add_package(self, package: Package) -> None:
+        if package.order_key not in self._locked_orders:
+            raise RuntimeError("Order must be locked before adding a package")
+        key = package.order_key
+        self._connection().execute(insert(packages).values(
+            client_id=key.client_id, order_id=key.order_id, package_id=package.package_id,
+            weight_grams=package.weight_grams, length_mm=package.length_mm,
+            width_mm=package.width_mm, height_mm=package.height_mm))
+        self._connection().execute(insert(package_items), [dict(
+            client_id=key.client_id, order_id=key.order_id, package_id=package.package_id,
+            line_id=item.line_id, warehouse_id=item.stock_key.warehouse_id,
+            sku=item.stock_key.sku, location_id=item.stock_key.location_id, quantity=item.quantity
+        ) for item in package.contents])
