@@ -1,0 +1,2 @@
+class IntegrationsError(ValueError):
+    pass

@@ -18,7 +18,7 @@ dependencies = [
 dev = ["pytest>=8.3,<10"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/inventory", "src/orders", "src/picking", "src/packing", "src/shipping", "src/messaging"]
+packages = ["src/inventory", "src/orders", "src/picking", "src/packing", "src/shipping", "src/messaging", "src/integrations"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
