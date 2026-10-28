@@ -29,6 +29,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [x] |
 | T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask-hosted GraphQL API and API tests | business mutations, pagination/query limits/batching counts; REST only for inbound webhooks/health | [x] |
 | T4b | T4a | API proof passes | delegated: adapters and diagnostics | infrastructure worker | cache/projection/telemetry + tests | Valkey outage, DynamoDB projection, local error capture, EDI fixtures | [ ] |
+| T4b-1 | T4a | API proof passes | delegated: cache adapter | infrastructure worker | cache port/Valkey adapter, Compose valkey, tests, study note | reads work with Valkey down; cache never authorizes allocation | [ ] |
+| T4b-2 | T4b-1 | cache slice committed | delegated: projection consumer | projection worker | DynamoDB Local Compose service, projection consumer/adapter, tests, study note | idempotent on duplicate event, rebuild from outbox, out-of-order/stale event ignored | [ ] |
+| T4b-3 | T4b-2 | projection committed | delegated: observability | observability worker | structured stderr logging, Compose loki/grafana/alloy, provisioning, tests, study note | JSON errors on stderr with request/event ids; Alloy tails logs/backend.log; Grafana query shows errors | [ ] |
+| T4b-4 | T4b-3 | observability committed | delegated: EDI fixtures | fixtures worker | fixtures + study note | representative 850/940/945/856 business-first fixtures, parse/duplicate tests | [ ] |
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
@@ -42,6 +46,13 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - API decision (user): GraphQL first; REST only when a feature needs it (inbound webhooks, health). Flask is the host and composition root (`create_app`), a thin adapter: resolvers/routes parse input, call one use case, map errors (OrderNotFound->not found, OrderError->conflict) in one place. Per-capability adapters/api folders, DTOs at the edge, no domain objects serialized directly, no flask/strawberry imports in domain/application (extend architecture tests). Mutations accept idempotent inputs.
 - API/worker share application use cases; domain/application never import Flask, SQLAlchemy, messaging or cache libraries.
 - PostgreSQL is authoritative; cache/projections cannot authorize allocations. Broker delivery is not exactly-once business execution.
+
+## T4b decisions (user, 2026-10-28)
+- Projection feed: RabbitMQ consumer (not relay) so the relay stays generic and DynamoDB slowness never holds the relay lock; reuses inbox dedup, retry and DLQ.
+- PostgreSQL stays the only source of truth (allocation needs multi-row locking/transactions and the outbox is a local PG transaction). Valkey and DynamoDB can vanish without breaking correctness.
+- Monitoring replaces Sentry-style capture: Grafana + Loki + Grafana Alloy (Promtail is EOL). Backend is host-run, so it writes JSON to stderr redirected to logs/backend.log; Alloy tails it via bind mount. App is unaware of Loki. No hosted telemetry.
+- Compose ports: loopback-only, non-default, checked with `ss -ltn`. src has no logging yet; T4b-3 adds it.
+- Branch: feat/local-fulfillment-lab-adapters (from 46c500c).
 
 ## Runtime and evidence
 - Baseline:39 tests pass on Python3.13.14; no framework/db dependencies yet. Docker daemon29.9.1 and Compose5.6.0 available; postgres16-alpine cached.
