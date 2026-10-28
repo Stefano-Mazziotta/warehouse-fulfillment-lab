@@ -148,7 +148,7 @@ or reconcile reservations/stock before any destructive operational downgrade.
 
 The earlier single-balance `AllocateInventory` remains a low-level,
 non-idempotent exercise, not the order allocation path. Order-owned partial picking now enforces its cancellation cutoff;
-order-owned packages now reconcile picked quantities; shipping is not implemented yet.
+order-owned packages now reconcile picked quantities; shipping is described below.
 
 ## Order-owned partial picking
 
@@ -176,3 +176,14 @@ factory. Packing locks the order, not inventory, and does not change balance-wid
 counters. Packages cannot be edited or removed in this slice. Read
 [the packing walkthrough](docs/study/packing.md) for conservation rules,
 concurrency proofs and the guarded downgrade to `0003_picking`.
+
+## Shipping with an unreliable carrier
+
+Migration `0005_shipping` adds one persisted shipping attempt per order.
+`ShipOrder` commits the attempt before calling the `CarrierPort`, never holds a
+database transaction across the call, and treats timeouts as `UNKNOWN`.
+`ReconcileShipment` looks the attempt up first and retries creation with the
+same attempt ID only on an authoritative NOT_FOUND. Finalization decrements
+on-hand, allocated and picked stock once and moves the order to `SHIPPED`.
+The fake carrier (`PostgresFakeCarrier`) is the only adapter; no network or real
+carrier is involved. See [the shipping walkthrough](docs/study/shipping.md).
