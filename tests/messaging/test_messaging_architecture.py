@@ -44,3 +44,10 @@ def test_fulfillment_capabilities_publish_events_only_through_inner_messaging_la
                     parts = module.split(".")
                     if parts[0] == "messaging":
                         assert len(parts) > 1 and parts[1] in {"domain", "application"}, (source, module)
+
+
+def test_broker_client_is_confined_to_messaging_infrastructure():
+    for source in SRC.rglob("*.py"):
+        if source.is_relative_to(ROOT / "infrastructure"):
+            continue
+        assert all(module.split(".")[0] != "pika" for module, _ in imported_modules(source)), source
