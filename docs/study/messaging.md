@@ -85,6 +85,37 @@ A handler's effects must live in the same database as the inbox row. If the effe
 external call (email, carrier), the inbox cannot make it atomic: that needs its own
 idempotency key, as in the shipping attempt ID.
 
+## RabbitMQ transport
+
+`RabbitMqPublisher` and `RabbitMqConsumerRunner` (pika, in `messaging/infrastructure`)
+implement the existing ports; domain and application never import `pika`.
+
+- **Publisher confirms + `mandatory`.** A plain `basic_publish` only means the bytes left
+  our socket. A confirm means the broker took responsibility (persisted a persistent
+  message to a durable queue); a `nack` means it refused. `mandatory` returns messages no
+  queue is bound for, which the broker would otherwise drop silently. Every one of these,
+  plus connection errors and timeouts, becomes `PublishFailed`, so the relay backs off and
+  keeps the row. Consequence: an event with no bound queue is retried, then DEAD.
+- **Topology** (`rabbitmq_topology.py`): durable topic exchange `fulfillment.events`,
+  routing key = event type, one durable queue per consumer name, `<queue>.retry` and
+  `<queue>.dlq`. Declaring again is a no-op; declaring with other arguments is rejected.
+- **Manual ack after commit.** The runner acks only after `IdempotentConsumer.handle`
+  returned, i.e. after the inbox row and the effects committed. Acking first would turn a
+  crash into LOSS; acking after turns it into a DUPLICATE, which the inbox absorbs.
+- **Redelivery.** If the worker dies between commit and ack, the broker requeues the
+  message and the inbox makes the second run a no-op. Broker redelivery plus inbox gives
+  effectively-once EFFECTS, never exactly-once DELIVERY.
+- **Retry and DLQ.** A failing handler does not crash the worker: the message is
+  republished to `<queue>.retry` (its TTL is the delay, after which it dead-letters back
+  to the work queue) with `x-attempt` incremented. After `max_attempts` handler runs it
+  goes to `<queue>.dlq` with `x-attempt` and `x-last-error`, and the original is acked.
+  Unreadable bodies skip retries. Trade-off: republish-then-ack is not atomic, so a crash
+  in between duplicates the message (again absorbed by the inbox); the DLQ needs a human
+  or a replay tool, which the lab does not build.
+- **Prefetch** bounds unacked messages per consumer, so a slow handler cannot hoard the
+  queue and memory stays bounded.
+- **Ordering** is still not guaranteed: retries reorder messages by design.
+
 ## Events plus reconciliation
 
 The outbox makes loss impossible for events we record, but it does not make systems
@@ -102,3 +133,7 @@ net. Never reason "the event was published, so the other system is in sync".
 4. A consumer handler calls an external API and then fails. What does the inbox guarantee?
 5. `OrderCancelled` arrives before `OrderAllocated`. Which handler design survives?
 6. Should `PUBLISHED` rows be deleted? What would break if you did it too early?
+7. The broker is up but the consumer's database is down for ten minutes. Where do the
+   messages wait, and what does `max_attempts` x retry delay decide?
+8. Kill the worker between commit and ack. Prove (with the test) that the effect happens
+   once.
