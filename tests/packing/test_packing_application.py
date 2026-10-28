@@ -103,6 +103,20 @@ def test_finish_packing_finalizes_once_when_repeated():
     assert transaction.order_saves == 1
 
 
+def test_packed_event_is_recorded_once_and_a_failed_finish_records_none():
+    transaction = InMemoryPackingTransaction(packages=full_packages())
+    finish = FinishPacking(transaction)
+    finish.execute(KEY)
+    finish.execute(KEY)
+    assert [e.event_type for e in transaction.events] == ["OrderPacked"]
+    assert transaction.events[0].payload["package_ids"] == ["box-0", "box-1"]
+
+    incomplete = InMemoryPackingTransaction(packages=())
+    with pytest.raises(OrderError):
+        FinishPacking(incomplete).execute(KEY)
+    assert incomplete.events == []
+
+
 @pytest.mark.parametrize("packages", [
     (),
     (package("box-0", content("one", BIN_A, 2), content("one", BIN_B, 1)),),

@@ -3,10 +3,13 @@
 from typing import Protocol
 
 from inventory.domain import InventoryBalance
+from messaging.application.event_recorder import EventRecorder
 from orders.domain import Order, OrderKey, Reservation
 
 
-class OrderTransaction(Protocol):
+class OrderTransaction(EventRecorder, Protocol):
+    """Also records events, so the state change and its outbox row share one commit."""
+
     def get_order(self, key: OrderKey, *, lock: bool = False) -> Order | None: ...
     def create_order(self, order: Order) -> Order: ...
     def lock_stock(self, order: Order) -> list[InventoryBalance]: ...

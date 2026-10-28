@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 
+from messaging.domain.fulfillment_events import order_shipped
 from orders.application.order_not_found import OrderNotFound
 from orders.domain import OrderError, OrderKey, OrderStatus
 from packing.domain.packing_config import PackingConfig
@@ -80,4 +81,7 @@ class ReconcileShipment:
                 transaction.save_stock(balances[stock_key].ship(quantity))
             transaction.save_order(order.ship())
             transaction.save_attempt(shipped_attempt)
+            transaction.record_event(order_shipped(
+                key.client_id, key.order_id, shipped_attempt.attempt_id,
+                shipped_attempt.tracking_number, (p.package_id for p in attempt.packages)))
             return shipped_attempt

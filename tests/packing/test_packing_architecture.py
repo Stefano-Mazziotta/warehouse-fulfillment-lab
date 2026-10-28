@@ -20,7 +20,7 @@ def test_packing_domain_and_application_have_only_inward_dependencies():
                     continue
                 for module in modules:
                     parts = module.split(".")
-                    if parts[0] in {"packing", "orders", "inventory"}:
+                    if parts[0] in {"packing", "orders", "inventory", "messaging"}:
                         allowed = {"domain"} if layer == "domain" else {"domain", "application"}
                         assert len(parts) > 1 and parts[1] in allowed
                     else:

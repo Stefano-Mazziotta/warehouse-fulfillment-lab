@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 
+from messaging.domain.fulfillment_events import picking_completed
 from orders.application.order_not_found import OrderNotFound
 from orders.application.order_transaction import OrderTransaction
 from orders.domain import Order, OrderKey
@@ -21,4 +22,5 @@ class CompletePicking:
             picked = order.complete_picking(transaction.get_reservations(key))
             if picked is not order:
                 transaction.save_order(picked)
+                transaction.record_event(picking_completed(key.client_id, key.order_id))
             return picked

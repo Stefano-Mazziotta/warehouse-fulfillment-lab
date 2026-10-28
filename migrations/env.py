@@ -10,6 +10,7 @@ from inventory.infrastructure.inventory_schema import metadata
 from packing.infrastructure import packing_schema
 from orders.infrastructure import order_schema
 from shipping.infrastructure import shipping_schema
+from messaging.infrastructure import messaging_schema
 
 
 def migrate(connection):
