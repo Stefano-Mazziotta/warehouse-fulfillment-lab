@@ -43,6 +43,20 @@ services:
       interval: 2s
       timeout: 2s
       retries: 20
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.4
+    pull_policy: never
+    # A read-model projection, not a database of record: in-memory, so a restart wipes it and
+    # the rebuild command brings it back from the PostgreSQL outbox.
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "127.0.0.1:58000:8000"
+    healthcheck:
+      # The image ships no curl; bash can still open a TCP connection.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
 volumes:
   postgres-data:
   rabbitmq-data:

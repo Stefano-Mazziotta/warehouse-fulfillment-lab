@@ -28,6 +28,14 @@ def valkey_url():
 
 
 @pytest.fixture
+def dynamodb_url():
+    url = os.environ.get("LAB_TEST_DYNAMODB_URL")
+    if not url:
+        pytest.skip("set LAB_TEST_DYNAMODB_URL for real DynamoDB Local proofs")
+    return url
+
+
+@pytest.fixture
 def orders_database():
     url = os.environ.get("LAB_TEST_DATABASE_URL")
     if not url:
