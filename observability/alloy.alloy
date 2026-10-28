@@ -1,0 +1,47 @@
+// Tail the file the backend writes to (stderr redirected by the shell) and push to Loki.
+// The application never talks to Loki; deleting this container changes nothing for it.
+
+local.file_match "backend" {
+  path_targets = [{
+    "__path__" = "/logs/backend.log",
+    "service"  = "backend",
+  }]
+}
+
+loki.source.file "backend" {
+  targets    = local.file_match.backend.targets
+  forward_to = [loki.process.backend.receiver]
+}
+
+loki.process "backend" {
+  // Parse the JSON line once, then promote only low-cardinality fields to labels.
+  // request_id, event_id and the rest stay in the log content: every distinct label value
+  // is a separate stream in Loki, and per-request values would create one stream per request.
+  stage.json {
+    expressions = {
+      level  = "level",
+      logger = "logger",
+      ts     = "timestamp",
+    }
+  }
+
+  stage.timestamp {
+    source = "ts"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = {
+      level  = "",
+      logger = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
