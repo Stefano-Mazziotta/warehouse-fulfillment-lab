@@ -1,10 +1,16 @@
 import json
+import logging
+import time
+from collections.abc import Callable
 
 import valkey
 
 from orders.application.cache_unavailable import CacheUnavailable
 from orders.application.order_summary import OrderSummary
 from orders.domain import OrderStatus
+
+
+logger = logging.getLogger("orders.cache")
 
 
 class ValkeyOrderSummaryCache:
@@ -17,6 +23,8 @@ class ValkeyOrderSummaryCache:
         ttl_seconds: int,
         key_prefix: str = "lab:order-summary:",
         timeout_seconds: float = 0.2,
+        clock: Callable[[], float] = time.monotonic,
+        log_interval_seconds: float = 5.0,
     ) -> None:
         # Short timeouts matter more than retries: a slow cache must cost less than the query it saves.
         self._client = valkey.Valkey.from_url(
@@ -27,9 +35,12 @@ class ValkeyOrderSummaryCache:
         )
         self._ttl_seconds = ttl_seconds
         self._key_prefix = key_prefix
+        self._clock = clock
+        self._log_interval_seconds = log_interval_seconds
+        self._next_log_at = 0.0
 
     def get(self, client_id: str, order_id: str) -> OrderSummary | None:
-        payload = self._call(self._client.get, self._key(client_id, order_id))
+        payload = self._call("get", self._client.get, self._key(client_id, order_id))
         if payload is None:
             return None
         try:
@@ -46,18 +57,28 @@ class ValkeyOrderSummaryCache:
             "status": summary.status.value,
         })
         self._call(
-            self._client.set, self._key(client_id, summary.order_id), payload, ex=self._ttl_seconds)
+            "put", self._client.set, self._key(client_id, summary.order_id), payload, ex=self._ttl_seconds)
 
     def invalidate(self, client_id: str, order_id: str) -> None:
-        self._call(self._client.delete, self._key(client_id, order_id))
+        self._call("invalidate", self._client.delete, self._key(client_id, order_id))
 
     def _key(self, client_id: str, order_id: str) -> str:
         # Owner is part of the key, mirroring the owner-scoped queries: no cross-client hits.
         return f"{self._key_prefix}{client_id}:{order_id}"
 
-    @staticmethod
-    def _call(operation, *args, **kwargs):
+    def _call(self, name: str, operation, *args, **kwargs):
         try:
             return operation(*args, **kwargs)
         except (valkey.ValkeyError, OSError) as error:
+            self._warn(name, error)
             raise CacheUnavailable(str(error)) from error
+
+    def _warn(self, name: str, error: Exception) -> None:
+        # Same size as the read path's cooldown, so a dead server logs once per window; the
+        # throttle also covers invalidations, which have no cooldown of their own.
+        now = self._clock()
+        if now < self._next_log_at:
+            return
+        self._next_log_at = now + self._log_interval_seconds
+        logger.warning("cache unavailable; reads fall back to PostgreSQL",
+                       extra={"operation": name, "error_type": type(error).__name__})

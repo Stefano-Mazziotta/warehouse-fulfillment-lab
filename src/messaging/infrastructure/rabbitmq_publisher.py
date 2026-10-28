@@ -1,3 +1,5 @@
+import logging
+
 import pika
 from pika.exceptions import AMQPError, ChannelError
 
@@ -7,6 +9,9 @@ from messaging.domain.outbox_message import OutboxMessage
 from .rabbitmq_connection import connection_parameters
 from .rabbitmq_message import encode
 from .rabbitmq_topology import RabbitMqTopology
+
+
+logger = logging.getLogger("messaging.publisher")
 
 
 class RabbitMqPublisher:
@@ -45,13 +50,23 @@ class RabbitMqPublisher:
             )
         except pika.exceptions.UnroutableError as error:
             self._discard()
+            self._log_failure(message, "unroutable")
             raise PublishFailed(f"unroutable: no queue is bound for {message.event_type}") from error
         except pika.exceptions.NackError as error:
             self._discard()
+            self._log_failure(message, "nack")
             raise PublishFailed("broker nack: the message was not accepted") from error
         except (AMQPError, ChannelError, OSError) as error:
             self._discard()
+            self._log_failure(message, type(error).__name__)
             raise PublishFailed(f"{type(error).__name__}: {error}") from error
+
+    @staticmethod
+    def _log_failure(message: OutboxMessage, reason: str) -> None:
+        # The relay decides retry vs dead; this is where the cause is known. Ids and a reason
+        # category only: broker errors can echo connection details.
+        logger.warning("publish failed", extra={
+            "event_id": message.message_id, "event_type": message.event_type, "reason": reason})
 
     def close(self) -> None:
         self._discard()

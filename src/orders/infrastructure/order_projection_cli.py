@@ -2,6 +2,7 @@
 
     LAB_DATABASE_URL, LAB_DYNAMODB_URL (and LAB_AMQP_URL for `run`) must be set.
 """
+import logging
 import os
 import signal
 import sys
@@ -11,11 +12,14 @@ from collections.abc import Mapping, Sequence
 from sqlalchemy import create_engine
 
 from messaging.infrastructure.postgres_inbox_transaction import PostgresInboxTransaction
+from observability.configure_logging import configure_logging
 from orders.application.rebuild_order_projection import RebuildOrderProjection
 
 from .dynamodb_order_projection import DynamoDbOrderProjection
-from .order_projection_worker import build_order_projection_runner
+from .order_projection_worker import QUEUE, build_order_projection_runner
 from .postgres_outbox_order_events import PostgresOutboxOrderEvents
+
+logger = logging.getLogger("orders.projection")
 
 USAGE = "usage: order_projection_cli (run | rebuild)"
 
@@ -30,12 +34,14 @@ def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
         print(f"Set {', '.join(missing)}", file=sys.stderr)
         return 2
 
+    configure_logging(level=environ.get("LAB_LOG_LEVEL", "INFO"))
     engine = create_engine(environ["LAB_DATABASE_URL"])
     projection = DynamoDbOrderProjection(environ["LAB_DYNAMODB_URL"])
     projection.install()
     if argv[0] == "rebuild":
         replayed = RebuildOrderProjection(projection, PostgresOutboxOrderEvents(engine)).run()
         print(f"replayed {replayed} order events")
+        logger.info("projection rebuilt from the outbox", extra={"replayed": replayed})
         return 0
 
     stop = threading.Event()
@@ -43,7 +49,9 @@ def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
         signal.signal(name, lambda *_: stop.set())
     runner = build_order_projection_runner(
         lambda: PostgresInboxTransaction(engine), environ["LAB_AMQP_URL"], projection)
+    logger.info("projection worker started", extra={"queue": QUEUE})
     runner.run(stop.is_set)
+    logger.info("projection worker stopped", extra={"queue": QUEUE})
     return 0
 
 
