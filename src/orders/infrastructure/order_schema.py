@@ -1,5 +1,3 @@
-"""Relational constraints make owner, warehouse and SKU consistency explicit."""
-
 from sqlalchemy import (
     CheckConstraint,
     Column,

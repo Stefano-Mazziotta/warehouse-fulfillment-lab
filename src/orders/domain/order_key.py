@@ -5,7 +5,6 @@ from .order_error import OrderError
 
 @dataclass(frozen=True)
 class OrderKey:
-    """Owner-scoped order identity, independent of any database."""
 
     client_id: str
     order_id: str

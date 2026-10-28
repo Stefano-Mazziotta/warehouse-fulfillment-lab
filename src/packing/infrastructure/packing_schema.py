@@ -1,4 +1,3 @@
-"""Package ownership and source attribution remain relationally enforceable."""
 from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Integer, Table, Text
 
 from inventory.infrastructure.inventory_schema import metadata

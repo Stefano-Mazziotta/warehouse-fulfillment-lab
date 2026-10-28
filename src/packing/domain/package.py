@@ -7,7 +7,6 @@ from .package_item import PackageItem
 
 @dataclass(frozen=True)
 class Package:
-    """Immutable package payload; package IDs are scoped to their owning order."""
 
     order_key: OrderKey
     package_id: str

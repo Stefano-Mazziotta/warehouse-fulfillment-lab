@@ -8,7 +8,6 @@ from orders.domain import OrderError, OrderKey, Reservation
 
 
 class RecordPick:
-    """Apply a cumulative reservation target and its stock delta atomically."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

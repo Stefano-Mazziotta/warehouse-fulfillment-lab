@@ -6,7 +6,6 @@ from orders.domain import OrderError, OrderKey
 
 @dataclass(frozen=True)
 class PackageItem:
-    """Physical units attributed to a complete order reservation identity."""
 
     order_key: OrderKey
     line_id: str

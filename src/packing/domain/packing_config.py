@@ -7,7 +7,6 @@ from .package import Package
 
 @dataclass(frozen=True)
 class PackingConfig:
-    """Check physical package quantities against the locked order snapshot."""
 
     order: Order
     reservations: tuple[Reservation, ...]

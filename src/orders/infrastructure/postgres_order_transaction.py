@@ -26,7 +26,6 @@ def order_identity(table: Table, key: OrderKey) -> ColumnElement[bool]:
 
 
 class PostgresOrderTransaction:
-    """Own connection lifetime; never commit inside an individual save."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine

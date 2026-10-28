@@ -1,5 +1,3 @@
-"""The stock identity whose quantities an inventory balance describes."""
-
 from dataclasses import dataclass
 
 

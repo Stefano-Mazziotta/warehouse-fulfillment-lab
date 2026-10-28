@@ -9,7 +9,6 @@ from .reservation import Reservation
 
 @dataclass(frozen=True)
 class Order:
-    """Immutable order snapshot; lines and warehouse never change after creation."""
 
     key: OrderKey
     warehouse_id: str
@@ -32,7 +31,6 @@ class Order:
         object.__setattr__(self, "lines", canonical_lines)
 
     def allocate(self) -> "Order":
-        """Promise the complete order; repeated allocation is a no-op."""
         if self.status == OrderStatus.ALLOCATED:
             return self
         if self.status != OrderStatus.CREATED:
@@ -40,7 +38,6 @@ class Order:
         return replace(self, status=OrderStatus.ALLOCATED)
 
     def cancel(self) -> "Order":
-        """Cancel before picking; repeated cancellation is a no-op."""
         if self.status == OrderStatus.CANCELLED:
             return self
         if self.status not in (OrderStatus.CREATED, OrderStatus.ALLOCATED):
@@ -48,7 +45,6 @@ class Order:
         return replace(self, status=OrderStatus.CANCELLED)
 
     def start_picking(self) -> "Order":
-        """Make the cancellation cutoff explicit."""
         if self.status == OrderStatus.PICKING:
             return self
         if self.status != OrderStatus.ALLOCATED:

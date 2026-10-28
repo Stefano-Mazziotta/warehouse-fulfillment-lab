@@ -8,7 +8,6 @@ from .order_key import OrderKey
 
 @dataclass(frozen=True)
 class Reservation:
-    """Historical attribution of promised units to one order line and stock key."""
 
     order_key: OrderKey
     line_id: str

@@ -1,5 +1,3 @@
-"""Reserve one balance atomically without choosing a database library."""
-
 from collections.abc import Callable
 
 from inventory.domain import InventoryBalance, InventoryKey
@@ -9,7 +7,6 @@ from .inventory_transaction import InventoryTransaction
 
 
 class AllocateInventory:
-    """Coordinate one locked balance reservation within one atomic boundary."""
 
     def __init__(self, transaction_factory: Callable[[], InventoryTransaction]) -> None:
         self._transaction_factory = transaction_factory
