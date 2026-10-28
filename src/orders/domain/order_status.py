@@ -6,4 +6,5 @@ class OrderStatus(StrEnum):
     ALLOCATED = "ALLOCATED"
     PICKING = "PICKING"
     PICKED = "PICKED"
+    PACKED = "PACKED"
     CANCELLED = "CANCELLED"

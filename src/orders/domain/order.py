@@ -83,3 +83,11 @@ class Order:
         if totals != {line.line_id: line.quantity for line in self.lines}:
             raise OrderError("Picked reservations must exactly cover every order line")
         return replace(self, status=OrderStatus.PICKED)
+
+    def finish_packing(self) -> "Order":
+        """The packing capability validates contents before this state transition."""
+        if self.status == OrderStatus.PACKED:
+            return self
+        if self.status != OrderStatus.PICKED:
+            raise OrderError("Only PICKED orders can finish packing")
+        return replace(self, status=OrderStatus.PACKED)
