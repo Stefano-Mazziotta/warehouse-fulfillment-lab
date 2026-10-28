@@ -10,6 +10,16 @@ from sqlalchemy import create_engine, text
 
 
 @pytest.fixture
+def drain_messaging():
+    """Empty the outbox and inbox so a test can reach a migration guard that is not messaging's."""
+    def drain(engine):
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM outbox_messages"))
+            connection.execute(text("DELETE FROM inbox_messages"))
+    return drain
+
+
+@pytest.fixture
 def orders_database():
     url = os.environ.get("LAB_TEST_DATABASE_URL")
     if not url:

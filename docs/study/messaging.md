@@ -128,8 +128,10 @@ implement the existing ports; domain and application never import `pika`.
 ## Events plus reconciliation
 
 The outbox makes loss impossible for events we record, but it does not make systems
-agree: consumers can be down for days, DEAD rows exist, schemas drift, and a downgrade
-of the migration discards undelivered rows. Events are the fast path; periodic
+agree: consumers can be down for days, DEAD rows exist, schemas drift, and a lost
+database never replays what it did not record. The 0006 downgrade refuses while PENDING
+or DEAD outbox rows or any inbox rows exist, so undelivered work is never dropped
+silently. Events are the fast path; periodic
 reconciliation (compare current state, replay by `updated_at` or cursor) is the safety
 net. Never reason "the event was published, so the other system is in sync".
 

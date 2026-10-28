@@ -38,8 +38,17 @@ def upgrade():
 
 
 def downgrade():
-    # Checkpoints and the event log are derived from the channel, which stays the
-    # source of truth: a later reconciliation rebuilds them. Orders are untouched.
+    connection = op.get_bind()
+    connection.execute(sa.text(
+        "LOCK TABLE integration_events, integration_checkpoints, channel_order_versions "
+        "IN ACCESS EXCLUSIVE MODE"))
+    # The channel stays the source of truth, but dropping these rows would forget which
+    # events were processed, which versions were seen and where reconciliation stopped.
+    if connection.scalar(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM integration_events) "
+        "OR EXISTS (SELECT 1 FROM integration_checkpoints) "
+        "OR EXISTS (SELECT 1 FROM channel_order_versions)")):
+        raise RuntimeError("Downgrade would discard integration information; reconcile first")
     op.drop_table("channel_order_versions")
     op.drop_table("integration_checkpoints")
     op.drop_table("integration_events")

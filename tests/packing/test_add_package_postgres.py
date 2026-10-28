@@ -168,10 +168,11 @@ def test_add_package_requires_picked_order(orders_database, status):
     assert saved(engine) == ()
 
 
-def test_migration_roundtrip_preserves_picked_orders(orders_database):
+def test_migration_roundtrip_preserves_picked_orders(orders_database, drain_messaging):
     engine = orders_database
     reservations = prepare(engine)
     config = Config("alembic.ini")
+    drain_messaging(engine)
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "0003_picking")
@@ -184,7 +185,7 @@ def test_migration_roundtrip_preserves_picked_orders(orders_database):
 
 
 @pytest.mark.parametrize("existing", ["package", "packed"])
-def test_migration_refuses_information_loss_and_locks_all_tables(orders_database, existing):
+def test_migration_refuses_information_loss_and_locks_all_tables(orders_database, drain_messaging, existing):
     engine = orders_database
     reservations = prepare(engine)
     if existing == "package":
@@ -193,6 +194,7 @@ def test_migration_refuses_information_loss_and_locks_all_tables(orders_database
         # Guard status independently of headers, even for an inconsistent import.
         with engine.begin() as connection:
             connection.execute(update(orders).values(status="PACKED"))
+    drain_messaging(engine)
     lock_snapshots = []
     def capture(connection, cursor, statement, parameters, context, many):
         if statement.startswith("LOCK TABLE orders, order_reservations, packages, package_items"):
