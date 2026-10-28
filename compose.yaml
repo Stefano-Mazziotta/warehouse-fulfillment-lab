@@ -1,0 +1,20 @@
+name: warehouse-fulfillment-lab
+services:
+  postgres:
+    image: postgres:16-alpine
+    pull_policy: never
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      POSTGRES_DB: warehouse_lab
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab -d warehouse_lab"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+volumes:
+  postgres-data:

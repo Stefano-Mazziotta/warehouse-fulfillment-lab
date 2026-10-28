@@ -1,7 +1,8 @@
 # Warehouse fulfillment lab
 
 A domain-first Python learning lab. The first inventory slice uses a `src/`
-layout and stays independent of Flask, databases, and queues.
+layout. Domain and application stay independent of Flask, databases, and queues;
+PostgreSQL infrastructure supplies atomic single-balance allocation.
 
 ## Run locally
 
@@ -66,9 +67,51 @@ the injected `get_inventory.execute(key)`, serialize the result, and translate
 `InventoryNotFound` to HTTP 404. Wire the repository and use case at startup
 as above, not inside the domain. Flask is deliberately not installed yet.
 
+## Run transactional allocation with PostgreSQL
+
+The cached `postgres:16-alpine` image is required; Compose never pulls it.
+The lab owns only Compose project `warehouse-fulfillment-lab`, loopback port
+55432, and its named data volume. Credentials below are local lab values only.
+
+```sh
+docker compose -p warehouse-fulfillment-lab up -d --wait postgres
+export LAB_DATABASE_URL=postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab
+uv run alembic upgrade head
+LAB_TEST_DATABASE_URL="$LAB_DATABASE_URL" uv run pytest
+```
+
+Without `LAB_TEST_DATABASE_URL`, seven PostgreSQL tests explicitly skip. A green
+unit-only run is NOT proof of database concurrency safety. Integration tests
+create and drop only randomly named `lab_test_<uuid>` schemas in the supplied
+PostgreSQL database; point them only at a disposable local lab database.
+
+`AllocateInventory.execute(key, quantity)` locks one complete stock identity,
+applies the domain rule, and commits its new balance. Use a fresh
+`PostgresInventoryTransaction` per call; `PostgresInventoryRepository` remains
+read-only. See [the transaction walkthrough](docs/study/transactional-allocation.md).
+There is no HTTP server yet.
+
+```python
+from sqlalchemy import create_engine
+from inventory.application.allocate_inventory import AllocateInventory
+from inventory.infrastructure.postgres_inventory_transaction import (
+    PostgresInventoryTransaction,
+)
+
+engine = create_engine("postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab")
+allocate = AllocateInventory(lambda: PostgresInventoryTransaction(engine))
+# With a balance already present: allocate.execute(key, 1)
+engine.dispose()
+```
+
+Stop only the lab with `docker compose -p warehouse-fulfillment-lab down`.
+This preserves its data volume. `uv run alembic downgrade base` removes the lab
+inventory table and all its balances: use only against this disposable database.
+
 ## Next learning exercise
 
-Implement allocation with tests before adding infrastructure. The immutable
-balance and read-only memory adapter do **not** provide concurrent reservation
-safety. Allocation, picking, packing, and shipping remain explicit exercises;
-database atomicity and transaction boundaries need a separate implementation.
+Single-balance allocation is not order allocation: the next slice must reserve
+all required balances and transition an order in ONE transaction, with explicit
+reservation ownership and deterministic lock order. Repeated calls currently
+reserve again; this is not an idempotent order endpoint. Picking, packing and
+shipping still require their own business models.

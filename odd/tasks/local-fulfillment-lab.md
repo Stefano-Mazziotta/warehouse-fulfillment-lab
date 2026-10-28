@@ -20,7 +20,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | ID | Depends | Ready when | Route | Owner | Exclusive files | Validation | Status |
 |---|---|---|---|---|---|---|---|
 | T1a | — | baseline verified | delegated: domain/tests/docs | allocation worker | inventory domain + domain tests, allocation study note | invalid/insufficient/repeated allocation, unchanged original | [x] |
-| T1b | T1a | domain proofs pass | delegated: persistence/config | persistence worker | inventory application/infrastructure, migrations, Compose, pyproject, integration tests | real PostgreSQL concurrent last-unit + rollback/isolation/migrations | [ ] |
+| T1b | T1a | domain proofs pass | delegated: persistence/config | persistence worker | inventory application/infrastructure, migrations, Compose, pyproject, integration tests | real PostgreSQL concurrent last-unit + rollback/isolation/migrations | [x] |
 | T2 | T1b | concurrency proof passes | delegated: multiple capabilities | fulfillment worker | orders/picking/packing/shipping and related tests | valid/invalid transitions, quantity reconciliation, carrier unknown outcome | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
 | T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask/GraphQL API and API tests | business endpoints, pagination/query limits/batching counts | [ ] |
@@ -28,10 +28,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
-- T1b: transactional allocation use case and PostgreSQL proof. T1a passed domain tests.
+- T2: order-linked reservations and multi-balance order transaction. T1a/T1b proofs pass.
 
 ## Blocked
-- T2 waits on T1b; T3 waits on T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
+- T3 waits on T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
@@ -47,6 +47,13 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - T1a RED:13 allocation tests failed with NotImplementedError; GREEN:52 passed. Parent independently reran52 passed; diff check clean. Validates exact positive integer, insufficient stock, original preservation and repeated reservations.
 - T1a rollback: revert allocation method, its13 tests and docs/study/inventory-allocation.md. HTTP harness N/A: pure domain slice. Native review disabled/unmanaged.
 - Host55432 confirmed free; cached PostgreSQL16-alpine image confirmed. No other container touched.
+- T1a commit883de37 on feat/local-fulfillment-lab-allocation; parent branch feat/local-fulfillment-lab. Slice121 authored additions/deletions. Tracker initialization80b8e59 is49 lines; running170 lines. No remote delivery.
+- T1b RED: missing AllocateInventory module, then application tests pass; missing inventory_schema before DB implementation. Additional RED: failed transaction initialization did not close connection; fixed self-cleanup because __exit__ is not called when __enter__ fails.
+- T1b GREEN: parent configured full run `LAB_TEST_DATABASE_URL=postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab uv run pytest -q`:67 passed in1.25s; git diff --check clean. Writer verified Alembic upgrade/downgrade/upgrade and actual pg_blocking_pids wait before releasing winner. Seven DB tests include migration/isolation/rollback/constraints/last-unit/missing/locked-save scenarios.
+- T1b runtime: lab PostgreSQL healthy on127.0.0.1:55432; Alembic initial migration applied. Container intentionally remains running; `docker compose -p warehouse-fulfillment-lab down` preserves its volume. HTTP harness N/A: no API adapter yet.
+- T1b rollback: against disposable lab DB only, downgrade migration then revert application transaction, PostgreSQL schema/adapters, tests/dependencies/Compose/runtime docs. Domain allocation remains intact.
+- T1b delivery: feat/local-fulfillment-lab-postgres targets feat/local-fulfillment-lab-allocation. Natural coherent DB slice exceeds400 authored lines (tests/migration/rollback/runtime all retained); no code compression. No PR created; recommend size:exception or schema/runtime vs transaction slices before any future PR. Native review disabled/unmanaged.
+- T2 preparation: do not loop single-balance allocation calls. New transaction must lock order, normalize repeated demand, lock balances in sorted full-key order and persist reservations/order/stock together. Location selection ascending location ID with split across locations within selected warehouse; cancellation cutoff is startPicking; shipment attempt covers all order packages.
 
 ## Next action
-Complete bounded T1a, then T1b with real concurrent PostgreSQL transactions. Do not mark later milestones complete from scaffolding or skipped tests.
+T1 inventory milestone complete; T2 is next. Orders/picking/packing/shipping/messaging/API/cache/projection/telemetry and final interview assets remain unimplemented; do not infer full-lab completion.
