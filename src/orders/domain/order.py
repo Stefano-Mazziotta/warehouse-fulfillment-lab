@@ -87,3 +87,11 @@ class Order:
         if self.status != OrderStatus.PICKED:
             raise OrderError("Only PICKED orders can finish packing")
         return replace(self, status=OrderStatus.PACKED)
+
+    def ship(self) -> "Order":
+        """The shipping capability validates the carrier receipt before this transition."""
+        if self.status == OrderStatus.SHIPPED:
+            return self
+        if self.status != OrderStatus.PACKED:
+            raise OrderError("Only PACKED orders can ship")
+        return replace(self, status=OrderStatus.SHIPPED)
