@@ -148,7 +148,7 @@ or reconcile reservations/stock before any destructive operational downgrade.
 
 The earlier single-balance `AllocateInventory` remains a low-level,
 non-idempotent exercise, not the order allocation path. Order-owned partial picking now enforces its cancellation cutoff;
-packages and shipping are not implemented yet.
+order-owned packages now reconcile picked quantities; shipping is not implemented yet.
 
 ## Order-owned partial picking
 
@@ -161,3 +161,18 @@ allocated stock. Cancellation is rejected once picking starts.
 `src/picking/application/` and share the order transaction factory above.
 See [the picking walkthrough](docs/study/picking.md) for retry semantics,
 concurrency proofs, scanner tradeoffs and the guarded downgrade.
+
+
+## Order-owned packages and packing completion
+
+Migration `0004_packing` adds immutable packages with positive integer gram/mm
+measurements and contents attributed to complete owned reservation identities.
+`AddPackage` accepts new packages only for `PICKED` orders; identical canonical
+retries are safe even after completion. `FinishPacking` requires exact package,
+reservation and line totals before moving the order to `PACKED`.
+
+Both use cases live in `src/packing/application/` and share the order transaction
+factory. Packing locks the order, not inventory, and does not change balance-wide
+counters. Packages cannot be edited or removed in this slice. Read
+[the packing walkthrough](docs/study/packing.md) for conservation rules,
+concurrency proofs and the guarded downgrade to `0003_picking`.
