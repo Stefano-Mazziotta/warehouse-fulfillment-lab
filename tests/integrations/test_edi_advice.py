@@ -97,3 +97,51 @@ def test_each_disagreement_is_reported_separately():
         "945", "SO-1001", "other-shipment", ("TRK-000123",), inbound_945().lines[:1])
     codes = {m.code for m in reconcile_advice(short, shipped())}
     assert codes == {MismatchCode.SHIPMENT_ID_DIFFERS, MismatchCode.QUANTITY_DIFFERS}
+
+
+def partially_shipped():
+    attempt = ShippingAttempt.open(KEY, (box("box-1", "1", "SKU-MUG-RED", 2),))
+    return attempt.confirm(CarrierReceipt(KEY, attempt.attempt_id, attempt.package_ids, "TRK-000123"))
+
+
+def partial_945():
+    return write_945(order(), partially_shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                     control_number=9, sent_at=SENT_AT)
+
+
+def test_partial_shipment_945_is_readable_with_a_zero_shipped_line():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert {line.sku: line.quantity for line in advice.lines} == {"SKU-MUG-RED": 2, "SKU-TEE-L": 0}
+
+
+def test_faithful_partial_945_reconciles_cleanly_against_the_partial_attempt():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert reconcile_advice(advice, partially_shipped()) == ()
+
+
+def test_partial_945_against_a_complete_shipment_is_a_quantity_mismatch():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert [m.code for m in reconcile_advice(advice, shipped())] == [MismatchCode.QUANTITY_DIFFERS]
+
+
+@pytest.mark.parametrize("shipped_quantity", ["-1", "two", ""])
+def test_negative_or_non_numeric_shipped_quantity_is_still_rejected(shipped_quantity):
+    text = partial_945().replace("*0*1*EA", f"*{shipped_quantity}*1*EA")
+
+    with pytest.raises(EdiError, match="Invalid quantity"):
+        read_ship_advice(read_interchange(text))
+
+
+@pytest.mark.parametrize("sender, receiver", [("S" * 16, "ACMEBRANDS"), ("LABWMS", "R" * 16)])
+@pytest.mark.parametrize("write", ["945", "856"])
+def test_ids_wider_than_the_fixed_width_isa_fields_are_refused(write, sender, receiver):
+    with pytest.raises(EdiError, match="15"):
+        if write == "945":
+            write_945(order(), shipped(), sender=sender, receiver=receiver,
+                      control_number=1, sent_at=SENT_AT)
+        else:
+            write_856(order(), shipped(), ship_to="X", customer_po="PO", sender=sender,
+                      receiver=receiver, control_number=1, sent_at=SENT_AT)

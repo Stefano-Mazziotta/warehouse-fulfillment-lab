@@ -13,10 +13,15 @@ from shipping.domain.shipping_attempt import ShippingAttempt
 from .x12 import EdiError
 
 UNIT = "EA"
+ISA_ID_WIDTH = 15
 
 
 def _envelope(sender: str, receiver: str, control_number: int, group: str, transaction_set: str,
               sent_at: datetime, body: list[str]) -> str:
+    for role, identifier in (("sender", sender), ("receiver", receiver)):
+        # ISA06/ISA08 are fixed at 15 characters; padding cannot shrink a longer id.
+        if len(identifier) > ISA_ID_WIDTH:
+            raise EdiError(f"ISA {role} id {identifier!r} is longer than {ISA_ID_WIDTH} characters")
     date, time = sent_at.strftime("%Y%m%d"), sent_at.strftime("%H%M")
     isa = (
         "ISA*00*" + " " * 10 + "*00*" + " " * 10

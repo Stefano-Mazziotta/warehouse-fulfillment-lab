@@ -30,6 +30,7 @@ class OrderRequest:
 
 @dataclass(frozen=True)
 class AdviceLine:
+    # Shipped quantity: 0 is legal, a 945 lists ordered SKUs that did not leave the building.
     sku: str
     quantity: int
 
@@ -52,12 +53,12 @@ def _require(interchange: Interchange, *accepted: str) -> None:
         )
 
 
-def _quantity(raw: str) -> int:
+def _quantity(raw: str, *, allow_zero: bool = False) -> int:
     try:
         quantity = int(raw)
     except ValueError:
         raise EdiError(f"Invalid quantity {raw!r}") from None
-    if quantity <= 0:
+    if quantity < 0 or (quantity == 0 and not allow_zero):
         raise EdiError(f"Invalid quantity {raw!r}")
     return quantity
 
@@ -117,7 +118,7 @@ def read_ship_advice(interchange: Interchange) -> ShipAdvice:
         header = _required(interchange.first("W06"), "W06")
         order_number, shipment_id = header.element(2), header.element(4)
         lines = tuple(
-            AdviceLine(s.element(8), _quantity(s.element(3)))
+            AdviceLine(s.element(8), _quantity(s.element(3), allow_zero=True))
             for s in interchange.find("W12") if s.element(7) == SKU_QUALIFIER
         )
     else:
@@ -142,6 +143,6 @@ def _notice_lines(interchange: Interchange) -> tuple[AdviceLine, ...]:
         if segment.tag == "LIN":
             sku = segment.element(3) if segment.element(2) == SKU_QUALIFIER else None
         elif segment.tag == "SN1" and sku:
-            lines.append(AdviceLine(sku, _quantity(segment.element(2))))
+            lines.append(AdviceLine(sku, _quantity(segment.element(2), allow_zero=True)))
             sku = None
     return tuple(lines)

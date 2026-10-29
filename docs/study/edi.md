@@ -92,6 +92,10 @@ acceptance. The lab does not generate acknowledgements; a rejected file simply r
 | Tracking differs | `TRACKING_DIFFERS` |
 | SKU totals differ | `QUANTITY_DIFFERS` |
 
+A 945 for a partial shipment lists the unshipped SKUs with shipped quantity `0`; the reader
+accepts that for advice lines (order lines still need a positive quantity) and reconciliation
+treats a `0` line as "not shipped".
+
 It only reports. What to do about a mismatch (resend, investigate, wait for the carrier
 reconciliation to finish) is a business decision. Delivery of a document never proves the two
 systems agree; periodic comparison of open 940s against 945s is the safety net, exactly as
@@ -117,8 +121,9 @@ the part this lab models.
   arguments and intake ignores the 940's PO and ship-to.
 - The 940 line ID is the line position; partners with real line numbers need them mapped.
 - Tracking is order-level in the lab carrier, so every package in an 856 repeats it.
-- No cancellations (940 cancel code), partial shipments (945 with short quantities) or
-  amendments, no acknowledgements, no persistence of outbound control numbers.
+- Known limitation: the tenant comes from the sender id (ISA06), which is unauthenticated
+  input. A real system needs a partner allow-list mapping authenticated senders to tenants.
+- No cancellations (940 cancel code) or amendments, no acknowledgements, no persistence of outbound control numbers.
 
 ## Interview-ready summary
 

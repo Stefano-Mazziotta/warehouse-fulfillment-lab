@@ -45,6 +45,8 @@ def reconcile_advice(advice: ShipAdvice, attempt: ShippingAttempt | None) -> tup
     claimed: dict[str, int] = {}
     for line in advice.lines:
         claimed[line.sku] = claimed.get(line.sku, 0) + line.quantity
+    # A line shipping 0 says "not shipped": the attempt has no entry for that SKU at all.
+    claimed = {sku: quantity for sku, quantity in claimed.items() if quantity}
     actual: dict[str, int] = {}
     for key, quantity in attempt.shipped_quantities().items():
         actual[key.sku] = actual.get(key.sku, 0) + quantity
