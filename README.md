@@ -279,3 +279,18 @@ uv run python -m orders.infrastructure.order_projection_cli run 2>> logs/backend
 - Truncate with `: > logs/backend.log` only while Alloy is stopped; rotation is not handled.
 
 See [the observability note](docs/study/observability.md).
+
+## Learning assets
+
+Start with the demo, break things with the drills, then use the last two to prepare for an
+interview. All are prediction-first: answer before you read the explanation.
+
+- [End-to-end demo](docs/demo.md): one scripted order from `CREATED` to `SHIPPED` through the API.
+- [Failure drills](docs/failure-drills.md): eight runnable failures (race, timeout, duplicates, crashes, outages).
+- [AWS map](docs/aws-map.md): each lab component mapped to AWS with trade-offs and sources. Reading only; nothing is deployed.
+- [Mock interview checklist](docs/interview-checklist.md): the success criteria as questions, evidence and a self-rating.
+- Study notes: [inventory](docs/study/inventory-allocation.md), [transactions](docs/study/transactional-allocation.md),
+  [orders](docs/study/order-allocation.md), [picking](docs/study/picking.md), [packing](docs/study/packing.md),
+  [shipping](docs/study/shipping.md), [messaging](docs/study/messaging.md), [reconciliation](docs/study/reconciliation.md),
+  [GraphQL API](docs/study/graphql-api.md), [read cache](docs/study/read-cache.md),
+  [order projection](docs/study/order-projection.md), [observability](docs/study/observability.md), [EDI](docs/study/edi.md).
