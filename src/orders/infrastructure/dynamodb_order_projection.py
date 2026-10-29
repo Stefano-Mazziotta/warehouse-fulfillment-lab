@@ -1,3 +1,6 @@
+import time
+from collections.abc import Callable
+
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config
@@ -7,6 +10,7 @@ from orders.application.order_projection import OrderProjectionUpdate, Projected
 from orders.application.projection_unavailable import ProjectionUnavailable
 from orders.domain import OrderStatus
 
+POLL_INTERVAL_SECONDS = 0.5
 FACTS = ("warehouse_id", "line_count", "package_count", "tracking_number")
 
 
@@ -32,6 +36,8 @@ class DynamoDbOrderProjection:
         table_name: str = "lab_order_projection",
         region: str = "us-east-1",
         timeout_seconds: float = 2.0,
+        ready_timeout_seconds: float = 30.0,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         # DynamoDB Local ignores credentials and region, but botocore insists on both.
         self._resource = boto3.resource(
@@ -46,6 +52,8 @@ class DynamoDbOrderProjection:
         )
         self._table = self._resource.Table(table_name)
         self._table_name = table_name
+        self._ready_timeout_seconds = ready_timeout_seconds
+        self._sleep = sleep
 
     def install(self) -> None:
         try:
@@ -60,8 +68,26 @@ class DynamoDbOrderProjection:
         except ClientError as error:
             if error.response["Error"]["Code"] != "ResourceInUseException":
                 raise ProjectionUnavailable(str(error)) from error
+            # Another process may still be creating it: existing is not the same as writable.
+            self._wait_until_active()
         except BotoCoreError as error:
             raise ProjectionUnavailable(str(error)) from error
+
+    def _wait_until_active(self) -> None:
+        # Attempt-bounded rather than clock-bounded so the wait is deterministic to test.
+        attempts = max(1, int(self._ready_timeout_seconds / POLL_INTERVAL_SECONDS))
+        for attempt in range(attempts):
+            try:
+                status = self._resource.meta.client.describe_table(
+                    TableName=self._table_name)["Table"]["TableStatus"]
+            except ClientError as error:
+                raise ProjectionUnavailable(str(error)) from error
+            if status == "ACTIVE":
+                return
+            if attempt < attempts - 1:
+                self._sleep(POLL_INTERVAL_SECONDS)
+        raise ProjectionUnavailable(
+            f"Table {self._table_name} is not ACTIVE after {self._ready_timeout_seconds}s")
 
     def drop(self) -> None:
         try:
