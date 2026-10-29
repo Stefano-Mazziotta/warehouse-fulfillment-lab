@@ -33,6 +33,9 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T4b-2 | T4b-1 | cache slice committed | delegated: projection consumer | projection worker | DynamoDB Local Compose service, projection consumer/adapter, tests, study note | idempotent on duplicate event, rebuild from outbox, out-of-order/stale event ignored | [x] |
 | T4b-3 | T4b-2 | projection committed | delegated: observability | observability worker | structured stderr logging, Compose loki/grafana/alloy, provisioning, tests, study note | JSON errors on stderr with request/event ids; Alloy tails logs/backend.log; Grafana query shows errors | [x] |
 | T4b-4 | T4b-3 | observability committed | delegated: EDI fixtures | fixtures worker | fixtures + study note | representative 850/940/945/856 business-first fixtures, parse/duplicate tests | [x] |
+| T5-1 | T4b | adapters committed | delegated: full demo | study worker | scripts/demo, docs/demo.md, tests | one scripted order-to-shipment run through the GraphQL API showing PostgreSQL state, outbox/RabbitMQ events, DynamoDB projection, Valkey hit and Grafana log line | [ ] |
+| T5-2 | T5-1 | demo committed | delegated: failure drills | study worker | scripts/drills, docs/failure-drills.md, tests | 8 runnable drills, each prediction-first (question, run, observe, explain) | [ ] |
+| T5-3 | T5-2 | drills committed | delegated: interview assets | study worker | docs/aws-map.md, docs/interview-checklist.md | lab-to-AWS service map with trade-offs; mock interview checklist tied to AGENTS.md success criteria | [ ] |
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
@@ -53,6 +56,12 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - Monitoring replaces Sentry-style capture: Grafana + Loki + Grafana Alloy (Promtail is EOL). Backend is host-run, so it writes JSON to stderr redirected to logs/backend.log; Alloy tails it via bind mount. App is unaware of Loki. No hosted telemetry.
 - Compose ports: loopback-only, non-default, checked with `ss -ltn`. src has no logging yet; T4b-3 adds it.
 - Branch: feat/local-fulfillment-lab-adapters (from 46c500c).
+
+## T5 decisions (coordinator default, 2026-10-29; learner may change the list)
+- Branch feat/local-fulfillment-lab-learning stacks on feat/local-fulfillment-lab-adapters; no need to merge the PR chain (#5-#16) first.
+- Eight failure drills, each grounded in something the lab built: (1) two workers allocate the last unit; (2) carrier times out after creating the shipment, response lost (UNKNOWN attempt); (3) webhook delivered twice; (4) events arrive out of order (projection stage); (5) worker crashes after commit before ack / mid-relay (outbox, ack-after-commit); (6) lost event repaired by reconciliation; (7) Valkey down (reads still work); (8) EDI document arrives twice (control-number idempotency). Not built, so not drilled: physical vs DB inventory drift, one-package-fails-while-another-ships, two warehouses on one order.
+- Mentor repo: drills are prediction-first. Each prints the question and what to watch, waits for the learner, then reveals; answers live in the doc, not in the script output before the prediction.
+- PR chain: tracker #5 (draft), children #6-#16 per docs of record in Engram topic odd/local-fulfillment-lab/pr-chain.
 
 ## Runtime and evidence
 - Baseline:39 tests pass on Python3.13.14; no framework/db dependencies yet. Docker daemon29.9.1 and Compose5.6.0 available; postgres16-alpine cached.
