@@ -123,7 +123,7 @@ In Grafana, Explore, data source Loki: `{service="backend"} |= "demo-err-<run id
 - The queue's cumulative publish counter in the RabbitMQ management API lags by seconds, so the
   demo reports the consumer's own inbox rows (`processed=`) next to the live queue depth.
 - The demo is the happy path. The failure drills (carrier timeout, duplicate webhook, lost
-  events, Valkey down, ...) are separate exercises.
+  events, Valkey down, ...) are separate exercises: see [the failure drills](failure-drills.md).
 
 ## Questions and answers
 
