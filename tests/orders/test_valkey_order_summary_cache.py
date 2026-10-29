@@ -81,3 +81,27 @@ def test_blackholed_server_times_out_instead_of_hanging():
         with pytest.raises(CacheUnavailable):
             cache.get("owner", "o1")
         assert time.monotonic() - started < 2
+
+
+@pytest.mark.parametrize("first, second", [
+    (("a:b", "c"), ("a", "b:c")),
+    (("a%3Ab", "c"), ("a:b", "c")),
+])
+def test_distinct_owner_and_order_pairs_never_share_a_key(first, second):
+    cache = ValkeyOrderSummaryCache("valkey://127.0.0.1:1/0", ttl_seconds=30)
+
+    assert cache._key(*first) != cache._key(*second)
+
+
+def test_an_owner_never_reads_another_owners_summary_through_a_delimiter(cache):
+    cache.put("a:b", OrderSummary("c", "w1", OrderStatus.ALLOCATED))
+
+    assert cache.get("a", "b:c") is None
+    assert cache.get("a:b", "c") is not None
+
+
+def test_invalidate_removes_an_entry_whose_ids_contain_the_delimiter(cache):
+    cache.put("a:b", OrderSummary("c:d", "w1", OrderStatus.ALLOCATED))
+    cache.invalidate("a:b", "c:d")
+
+    assert cache.get("a:b", "c:d") is None

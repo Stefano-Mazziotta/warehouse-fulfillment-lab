@@ -2,6 +2,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from urllib.parse import quote
 
 import valkey
 
@@ -64,7 +65,9 @@ class ValkeyOrderSummaryCache:
 
     def _key(self, client_id: str, order_id: str) -> str:
         # Owner is part of the key, mirroring the owner-scoped queries: no cross-client hits.
-        return f"{self._key_prefix}{client_id}:{order_id}"
+        # Each part is percent-encoded so ":" can only be the separator; otherwise owner "a:b"
+        # + order "c" would share a key with owner "a" + order "b:c".
+        return f"{self._key_prefix}{quote(client_id, safe='')}:{quote(order_id, safe='')}"
 
     def _call(self, name: str, operation, *args, **kwargs):
         try:
