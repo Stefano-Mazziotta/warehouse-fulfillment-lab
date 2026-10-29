@@ -109,3 +109,23 @@ def test_the_command_names_the_settings_it_is_missing(capsys):
     assert main(["run"], {"LAB_DATABASE_URL": "x"}) == 2
     assert "LAB_DYNAMODB_URL, LAB_AMQP_URL" in capsys.readouterr().err
     assert main(["explode"], {}) == 2
+
+
+def test_events_of_one_transaction_replay_in_lifecycle_order_whatever_their_ids(orders_database):
+    # One business transaction stamps the same created_at on every event it records.
+    with orders_database.begin() as connection:
+        for event in (order_shipped("owner", "o1", "attempt", "trk-1", ["p1"]),
+                      order_packed("owner", "o1", ["p1"]),
+                      picking_completed("owner", "o1"),
+                      order_allocated("owner", "o1", "w1", [("l1", "sku", 1)])):
+            record_outbox_event(connection, event, START)
+        for position, event_type in enumerate(
+            ("OrderShipped", "OrderPacked", "PickingCompleted", "OrderAllocated")
+        ):
+            # Ids sort against the lifecycle, so id order alone would replay it backwards.
+            connection.execute(text("update outbox_messages set message_id = :new where event_type = :type"),
+                               {"new": f"id-{position}", "type": event_type})
+
+    replayed = [m.event_type for m in PostgresOutboxOrderEvents(orders_database).events()]
+
+    assert replayed == ["OrderAllocated", "PickingCompleted", "OrderPacked", "OrderShipped"]

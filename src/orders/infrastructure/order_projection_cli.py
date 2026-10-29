@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 
 from messaging.infrastructure.postgres_inbox_transaction import PostgresInboxTransaction
 from observability.configure_logging import configure_logging
+from orders.application.projection_unavailable import ProjectionUnavailable
 from orders.application.rebuild_order_projection import RebuildOrderProjection
 
 from .dynamodb_order_projection import DynamoDbOrderProjection
@@ -37,12 +38,16 @@ def main(argv: Sequence[str], environ: Mapping[str, str]) -> int:
     configure_logging(level=environ.get("LAB_LOG_LEVEL", "INFO"))
     engine = create_engine(environ["LAB_DATABASE_URL"])
     projection = DynamoDbOrderProjection(environ["LAB_DYNAMODB_URL"])
-    projection.install()
-    if argv[0] == "rebuild":
-        replayed = RebuildOrderProjection(projection, PostgresOutboxOrderEvents(engine)).run()
-        print(f"replayed {replayed} order events")
-        logger.info("projection rebuilt from the outbox", extra={"replayed": replayed})
-        return 0
+    try:
+        projection.install()
+        if argv[0] == "rebuild":
+            replayed = RebuildOrderProjection(projection, PostgresOutboxOrderEvents(engine)).run()
+            print(f"replayed {replayed} order events")
+            logger.info("projection rebuilt from the outbox", extra={"replayed": replayed})
+            return 0
+    except ProjectionUnavailable as error:
+        print(f"The order projection is unavailable: {error}", file=sys.stderr)
+        return 1
 
     stop = threading.Event()
     for name in (signal.SIGINT, signal.SIGTERM):
