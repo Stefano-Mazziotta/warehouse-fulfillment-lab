@@ -98,3 +98,31 @@ def test_wrong_document_for_this_intake_creates_nothing():
         edi.receive(fixture("945_warehouse_shipping_advice.edi"))
 
     assert store.orders == {} and store.inbox == set()
+
+
+def second_transaction(text):
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("ST*"))
+    end = next(i for i, line in enumerate(lines) if line.startswith("SE*"))
+    block = [line.replace("SO-1001", "SO-2002").replace("0001", "0002") for line in lines[start:end + 1]]
+    return "\n".join(lines[:end + 1] + block + lines[end + 1:]) + "\n"
+
+
+def test_interchange_with_two_transactions_is_refused_and_creates_nothing():
+    store, edi = intake()
+
+    with pytest.raises(EdiError, match="one transaction"):
+        edi.receive(second_transaction(fixture("940_warehouse_shipping_order.edi")))
+
+    assert store.orders == {} and store.inbox == set()
+
+
+def test_transaction_without_its_closing_se_is_refused():
+    store, edi = intake()
+    text = fixture("940_warehouse_shipping_order.edi")
+    unclosed = "\n".join(line for line in text.splitlines() if not line.startswith("SE*")) + "\n"
+
+    with pytest.raises(EdiError, match="SE"):
+        edi.receive(unclosed)
+
+    assert store.orders == {} and store.inbox == set()

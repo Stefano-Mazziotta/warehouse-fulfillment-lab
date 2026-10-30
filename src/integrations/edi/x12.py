@@ -4,6 +4,7 @@ This is NOT a validating parser. It does not check segment counts (SE01, GE01, I
 qualifiers, code lists, element lengths or the functional group. It checks only what
 teaches the integration lessons: the file is complete (ISA ... IEA) and the control
 number is a usable idempotency handle.
+It reads exactly one transaction (ST ... SE) per interchange; batches are refused, not split.
 """
 from dataclasses import dataclass
 
@@ -66,9 +67,17 @@ def read_interchange(text: str) -> Interchange:
         raise EdiError("Interchange is truncated: IEA trailer missing")
     if trailer.element(2) != isa.element(13):
         raise EdiError("IEA control number does not match the ISA header")
-    transaction = next((s for s in segments if s.tag == "ST"), None)
-    if transaction is None:
+    starts = [s for s in segments if s.tag == "ST"]
+    if not starts:
         raise EdiError("Interchange carries no transaction set (ST)")
+    if len(starts) > 1:
+        raise EdiError("Interchange carries more than one transaction set; this reader takes one transaction per interchange")
+    transaction = starts[0]
+    ends = [s for s in segments if s.tag == "SE"]
+    if len(ends) != 1 or segments.index(ends[0]) < segments.index(transaction):
+        raise EdiError("Transaction set is not closed by exactly one SE after its ST")
+    if ends[0].element(2) != transaction.element(2):
+        raise EdiError("SE control number does not match the ST header")
     return Interchange(
         sender_id=isa.element(6).strip(),
         receiver_id=isa.element(8).strip(),
