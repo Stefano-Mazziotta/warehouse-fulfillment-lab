@@ -80,6 +80,14 @@ class RabbitMqConsumerRunner:
             channel, self._queue, self._routing_keys, self._retry_delay_ms)
 
     def _process(self, channel: BlockingChannel, delivery_tag: int, properties, body: bytes) -> None:
+        headers = properties.headers or {}
+        previous_attempts = headers.get(ATTEMPT_HEADER, 0)
+        if type(previous_attempts) is not int or previous_attempts < 0:
+            # Retry metadata we did not write: no redelivery can repair it either.
+            self._republish(channel, self._topology.dead_letter_queue(self._queue), properties, body,
+                            attempt=0, error=f"invalid {ATTEMPT_HEADER} header: {previous_attempts!r}")
+            channel.basic_ack(delivery_tag)
+            return
         try:
             message = decode(body)
         except (ValueError, KeyError, TypeError) as error:
@@ -94,7 +102,7 @@ class RabbitMqConsumerRunner:
         channel.basic_ack(delivery_tag)
 
     def _fail(self, channel: BlockingChannel, properties, body: bytes, error: Exception) -> None:
-        attempt = (properties.headers or {}).get(ATTEMPT_HEADER, 0) + 1
+        attempt = (properties.headers or {}).get(ATTEMPT_HEADER, 0) + 1  # validated in _process
         if attempt >= self._max_attempts:
             target = self._topology.dead_letter_queue(self._queue)
         else:
