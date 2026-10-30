@@ -101,3 +101,21 @@ def test_cancel_order_is_idempotent_and_releases_stock(lab):
     assert transition(lab, "cancelOrder") == transition(lab, "cancelOrder") == "CANCELLED"
     assert lab.ok("""{ inventoryBalance(sku: "sku", warehouseId: "w1", locationId: "a") {
         allocated available } }""") == {"inventoryBalance": {"allocated": 0, "available": 5}}
+
+
+def test_later_mutation_fields_in_one_operation_see_earlier_writes(lab):
+    seed_stock(lab.engine, "owner", "sku", "w1", a=2)
+    lab.ok(CREATE, {"input": {"orderId": "o1", "warehouseId": "w1", "lines": [
+        {"lineId": "l1", "sku": "sku", "quantity": 2}]}})
+    transition(lab, "allocateInventory")
+    item = reservations(lab)[0]
+
+    data = lab.ok("""mutation($input: RecordPickInput!) {
+        before: startPicking(orderId: "o1") { order { reservations { pickedQuantity } } }
+        pick: recordPick(input: $input) { reservation { pickedQuantity } }
+        after: completePicking(orderId: "o1") { order { reservations { pickedQuantity } } }
+    }""", {"input": {"orderId": "o1", "lineId": item["lineId"], "stock": stock(item), "pickedQuantity": 2}})
+
+    assert data["before"]["order"]["reservations"][0]["pickedQuantity"] == 0
+    assert data["pick"]["reservation"]["pickedQuantity"] == 2
+    assert data["after"]["order"]["reservations"][0]["pickedQuantity"] == 2

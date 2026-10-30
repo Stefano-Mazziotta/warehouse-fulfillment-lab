@@ -4,6 +4,7 @@ import strawberry
 
 from ..app_config import AppConfig
 from .error_mapping import ErrorMapping
+from .fresh_loaders_per_mutation_field import FreshLoadersPerMutationField
 from .inventory.inventory_query import InventoryQuery
 from .orders.order_mutation import OrderMutation
 from .orders.order_query import OrderQuery
@@ -28,5 +29,5 @@ def build_schema(config: AppConfig) -> strawberry.Schema:
         query=Query,
         mutation=Mutation,
         # A factory (not an instance) gives every request its own extension object.
-        extensions=[ErrorMapping, partial(QueryLimits, config)],
+        extensions=[ErrorMapping, FreshLoadersPerMutationField, partial(QueryLimits, config)],
     )
