@@ -59,3 +59,46 @@ def test_fragment_cycles_are_rejected_without_hanging(adapter_lab):
 def test_limits_come_from_configuration():
     strict = build_adapter_lab(max_query_complexity=5)
     assert strict.error_codes("{ orders(first: 2) { nodes { orderId lines { sku } } } }") == ["QUERY_TOO_COMPLEX"]
+
+
+class ExplodingReceiver:
+    def execute(self, *_):
+        raise RuntimeError("password=hunter2 host=db.internal")
+
+
+def test_unexpected_webhook_failure_is_a_safe_json_500_with_a_request_id(caplog):
+    lab = build_adapter_lab(receive=ExplodingReceiver())
+    response = lab.client.post(
+        "/webhooks/sales-channel", json=event(), headers={"X-Request-ID": "req-42"})
+    assert response.status_code == 500
+    assert response.mimetype == "application/json"
+    assert response.get_json() == {"error": {"code": "INTERNAL", "message": "Internal server error",
+                                             "requestId": "req-42"}}
+    assert "hunter2" not in response.get_data(as_text=True)
+    record = next(r for r in caplog.records if r.name == "api.errors")
+    assert record.request_id == "req-42" and record.exc_info  # the original is logged server-side
+
+
+def test_unknown_url_is_a_json_404(adapter_lab):
+    response = adapter_lab.client.get("/nope")
+    assert response.status_code == 404 and response.mimetype == "application/json"
+    assert response.get_json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_wrong_method_is_a_json_405_that_keeps_the_allow_header(adapter_lab):
+    response = adapter_lab.client.get("/webhooks/sales-channel")
+    assert response.status_code == 405 and response.mimetype == "application/json"
+    assert response.get_json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+    assert "POST" in response.headers["Allow"]
+
+
+def test_oversized_body_is_a_json_413():
+    lab = build_adapter_lab(max_request_bytes=100)
+    response = lab.client.post("/webhooks/sales-channel", json=event())
+    assert response.status_code == 413 and response.mimetype == "application/json"
+    assert response.get_json()["error"]["code"] == "PAYLOAD_TOO_LARGE"
+
+
+def test_a_generated_request_id_is_returned_when_the_caller_sends_none(adapter_lab):
+    response = adapter_lab.client.get("/nope")
+    assert response.get_json()["error"]["requestId"] == response.headers["X-Request-ID"]

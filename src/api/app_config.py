@@ -12,6 +12,8 @@ class AppConfig:
     max_page_size: int = 50
     max_query_depth: int = 7
     max_query_complexity: int = 1000
+    # Bounds the body Flask will read; larger requests get a 413 before any parsing.
+    max_request_bytes: int = 1_000_000
     # The fake carrier lives outside Alembic; this creates its tables when missing.
     install_lab_fakes: bool = True
 
