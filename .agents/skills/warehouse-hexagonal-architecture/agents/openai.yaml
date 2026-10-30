@@ -1,0 +1,4 @@
+interface:
+  display_name: "Warehouse Hexagonal Architecture"
+  short_description: "Python and Flask boundaries for the fulfillment lab"
+  default_prompt: "Use $warehouse-hexagonal-architecture to review this fulfillment slice and explain its boundaries, invariants, and failure modes."

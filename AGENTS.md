@@ -1,5 +1,15 @@
 # AGENTS.md
 
+## Repository Skills
+
+For architecture design, implementation, refactoring, or review in this repository,
+read and apply
+[warehouse-hexagonal-architecture](.agents/skills/warehouse-hexagonal-architecture/SKILL.md).
+Use it for Python ports, transaction boundaries, and Flask adapters; follow the
+checked-out code rather than assuming the fulfillment feature chain is merged.
+Explicitly invoke it with `$warehouse-hexagonal-architecture` where supported.
+Keep this file's mentor-first workflow and the user's requested scope in control.
+
 ## Mission
 
 You are my **Senior Backend Engineer + Warehouse/Logistics Domain Mentor**.
