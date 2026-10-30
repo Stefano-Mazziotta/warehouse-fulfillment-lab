@@ -56,7 +56,7 @@ def test_reads_945_shipping_advice_business_fields():
 
     assert advice.transaction_set == "945"
     assert advice.order_number == "SO-1001"
-    assert advice.shipment_id == "4d3e2336-7c55-5306-a2d6-3de5784db19f"
+    assert advice.shipment_id == "4eef5380-9d31-5b67-87ab-f4292a7db9ef"
     assert advice.tracking_numbers == ("TRK-000123",)
     assert [(line.sku, line.quantity) for line in advice.lines] == [
         ("SKU-MUG-RED", 2), ("SKU-TEE-L", 1)]
@@ -67,7 +67,7 @@ def test_reads_856_advance_ship_notice_business_fields():
 
     assert advice.transaction_set == "856"
     assert advice.order_number == "PO-4500012345"
-    assert advice.shipment_id == "4d3e2336-7c55-5306-a2d6-3de5784db19f"
+    assert advice.shipment_id == "4eef5380-9d31-5b67-87ab-f4292a7db9ef"
     # Both packages carry the same order-level tracking number; it is reported once.
     assert advice.tracking_numbers == ("TRK-000123",)
     assert [(line.sku, line.quantity) for line in advice.lines] == [
