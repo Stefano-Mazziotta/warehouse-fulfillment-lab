@@ -16,8 +16,10 @@ class ReconcileChannelOrders:
     One page per checkpoint transaction: lock the checkpoint, read the page, ingest
     every order (each in its own commit), and only then advance the checkpoint. A
     crash anywhere before that re-reads the page, which is harmless because ingest
-    is idempotent. The first page of a run starts `overlap` before the checkpoint to
-    catch orders committed late or stamped by a skewed clock.
+    is idempotent. A run starts `overlap` before the checkpoint to catch orders
+    committed late or stamped by a skewed clock, then walks forward page by page with
+    its own read cursor (which may sit below the checkpoint); the durable checkpoint
+    itself only ever moves forward.
     """
 
     def __init__(
@@ -43,11 +45,12 @@ class ReconcileChannelOrders:
 
     def execute(self, client_id: str) -> ReconciliationReport:
         report = ReconciliationReport()
+        position = None            # this run's read cursor; the checkpoint is separate
         first_page = True
         while True:
             with self._checkpoints() as checkpoint:
                 saved = checkpoint.lock_cursor(self._source, client_id)
-                start = saved.minus(self._overlap) if saved and first_page else saved
+                start = (saved.minus(self._overlap) if saved else None) if first_page else position
                 page = self._channel.list_orders_updated_since(client_id, start, self._page_size)
                 page_durable = True
                 for order in page.orders:
@@ -63,5 +66,6 @@ class ReconcileChannelOrders:
                 if cursor is not None and (saved is None or cursor > saved):
                     checkpoint.advance(self._source, client_id, cursor, self._clock())
             first_page = False
+            position = page.next_cursor
             if not page.has_more:
                 return report

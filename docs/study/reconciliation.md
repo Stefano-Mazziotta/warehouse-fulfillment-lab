@@ -59,8 +59,8 @@ so a page boundary never splits ties.
 
 Commits are not visible in timestamp order: a transaction stamped 12:00:00 may commit
 at 12:00:07, after we checkpointed 12:00:05. Clocks also skew. A strict checkpoint would
-miss it forever. So the first page of every run starts `overlap` BEFORE the checkpoint
-and re-reads recent history. Cost: some orders are read twice, which idempotency makes
+miss it forever. So every run starts `overlap` BEFORE the checkpoint and re-reads recent
+history page by page, with a per-run read cursor separate from the checkpoint. Cost: some orders are read twice, which idempotency makes
 harmless. The overlap is a bet about how late things arrive, not a proof; an order
 later than the window is still missed (see below).
 

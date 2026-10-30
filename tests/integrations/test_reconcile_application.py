@@ -161,3 +161,36 @@ def test_each_owner_has_its_own_checkpoint(lab):
     lab.reconcile.execute("a")
     assert (SOURCE, "b") not in lab.store.checkpoints
     assert lab.order_ids() == ["c1"]
+
+
+def test_overlap_is_walked_page_by_page_not_only_on_the_first_page():
+    lab = Harness(page_size=2, overlap=timedelta(minutes=10))
+    lab.webhooks.drop = True
+    for order_id, minutes in (("c90", 90), ("c91", 91), ("c100", 100)):
+        lab.place(order_id, minutes)
+    lab.reconcile.execute("owner")
+    assert lab.store.checkpoints[(SOURCE, "owner")] == ChannelCursor(at(100), "c100")
+    lab.place("c92", 92)
+    lab.place("c95", 95)          # late arrivals inside the overlap window
+    report = lab.reconcile.execute("owner")
+    assert report.repaired == 2
+    assert lab.order_ids() == ["c100", "c90", "c91", "c92", "c95"]
+    # The checkpoint never moves backwards while re-walking the window.
+    assert lab.store.checkpoints[(SOURCE, "owner")] == ChannelCursor(at(100), "c100")
+
+
+def test_failure_inside_the_overlap_walk_keeps_the_checkpoint_and_the_next_run_repairs():
+    lab = Harness(page_size=2, overlap=timedelta(minutes=10))
+    lab.webhooks.drop = True
+    for order_id, minutes in (("c90", 90), ("c91", 91), ("c100", 100)):
+        lab.place(order_id, minutes)
+    lab.reconcile.execute("owner")
+    lab.place("c92", 92)
+    lab.place("c95", 95)
+    lab.store.fail_on = "c95"
+    report = lab.reconcile.execute("owner")
+    assert report.failed == 1
+    assert lab.store.checkpoints[(SOURCE, "owner")] == ChannelCursor(at(100), "c100")
+    lab.store.fail_on = None
+    assert lab.reconcile.execute("owner").failed == 0
+    assert lab.order_ids() == ["c100", "c90", "c91", "c92", "c95"]
