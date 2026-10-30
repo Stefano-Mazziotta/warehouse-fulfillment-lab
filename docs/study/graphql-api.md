@@ -24,7 +24,8 @@ GraphQL exposes business capabilities (`createOrder`, `allocateInventory`, `star
 (`GET /health`) and an inbound webhook from a system that dictates its own HTTP contract
 (`POST /webhooks/sales-channel`). The webhook validates, persists the raw event, processes it
 through the idempotent inbox and returns 202 for new and duplicate event IDs alike; a bad
-payload is a 400.
+payload is a 400. The full request/response contract and retry policy live in
+`docs/api/sales-channel-webhook.md`.
 
 ## Idempotent mutations
 

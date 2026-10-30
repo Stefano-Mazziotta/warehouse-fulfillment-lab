@@ -1,0 +1,13 @@
+{
+  "event_id": "evt-1001",
+  "order": {
+    "client_id": "acme",
+    "channel_order_id": "SO-1001",
+    "warehouse_id": "w1",
+    "version": 1,
+    "updated_at": "2026-10-01T12:00:00+00:00",
+    "lines": [
+      {"line_id": "l1", "sku": "SKU-123", "quantity": 2}
+    ]
+  }
+}
