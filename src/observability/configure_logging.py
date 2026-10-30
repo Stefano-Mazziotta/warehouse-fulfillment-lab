@@ -23,5 +23,10 @@ def configure_logging(stream: TextIO | None = None, level: str = "INFO") -> None
     root.addHandler(handler)
     root.setLevel(level.upper())
     # We log unexpected GraphQL errors ourselves (with the request id); Strawberry's own
-    # record of the same exception would double every incident.
-    logging.getLogger("strawberry.execution").propagate = False
+    # record of the same exception would double every incident. A logger with no handler and
+    # propagation off falls back to logging.lastResort (raw stderr, query text and all), so
+    # it gets a NullHandler: the record is swallowed on purpose.
+    strawberry = logging.getLogger("strawberry.execution")
+    strawberry.propagate = False
+    if not any(isinstance(h, logging.NullHandler) for h in strawberry.handlers):
+        strawberry.addHandler(logging.NullHandler())
