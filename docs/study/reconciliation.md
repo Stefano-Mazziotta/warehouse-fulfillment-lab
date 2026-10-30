@@ -25,7 +25,10 @@ Webhook and reconciler both call `ReceiveChannelEvent`:
    (`RECEIVED`) in its own committed transaction. If processing then fails, the evidence
    remains and nothing is lost.
 2. **Inbox.** `IdempotentConsumer` records `(channel-order-ingest, event_id)` in the same
-   transaction as the effects. A duplicate event ID is a no-op.
+   transaction as the effects. A duplicate event ID is a no-op. The inbox key is the event
+   ID alone, so provider-chosen IDs are assumed globally unique; the IDs we derive for
+   reconciliation percent-encode the tenant and order parts so `("a:b", "c")` and
+   `("a", "b:c")` can never share one.
 3. **`IngestChannelOrder`** maps the channel order to the existing `CreateOrder`
    (idempotent) and records the accepted channel version in `channel_order_versions`.
 

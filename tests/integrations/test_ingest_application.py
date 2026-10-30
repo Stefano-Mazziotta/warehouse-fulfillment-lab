@@ -99,3 +99,13 @@ def test_processing_failure_keeps_the_raw_event_and_a_retry_succeeds(store, rece
     store.fail_on = None
     assert receive(event(channel_order())) is Outcome.CREATED
     assert store.events["evt-1"]["status"] == "PROCESSED"
+
+
+def test_reconciliation_events_of_tenants_that_differ_by_the_delimiter_both_create_their_orders(store, receive):
+    first = ChannelEvent.for_reconciliation(channel_order("c", client="a:b"))
+    second = ChannelEvent.for_reconciliation(channel_order("b:c", client="a"))
+    assert first.event_id != second.event_id
+    assert receive(first) is Outcome.CREATED
+    assert receive(second) is Outcome.CREATED
+    assert set(store.orders) == {OrderKey("a:b", "c"), OrderKey("a", "b:c")}
+    assert first.event_id == ChannelEvent.for_reconciliation(channel_order("c", client="a:b")).event_id
