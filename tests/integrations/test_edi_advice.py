@@ -145,3 +145,33 @@ def test_ids_wider_than_the_fixed_width_isa_fields_are_refused(write, sender, re
         else:
             write_856(order(), shipped(), ship_to="X", customer_po="PO", sender=sender,
                       receiver=receiver, control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("bad", ["PO~N1*ST*INJECTED", "A*B", "A>B", "A\nB"])
+def test_856_rejects_reserved_delimiters_in_data_elements(bad):
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(), ship_to=bad, customer_po="PO-1",
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(), ship_to="Store", customer_po=bad,
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("bad", ["TRK~1", "TRK*1"])
+def test_945_and_856_reject_reserved_delimiters_in_tracking(bad):
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(order(), shipped(bad), sender="LABWMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(bad), ship_to="Store", customer_po="PO-1",
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+
+
+def test_945_rejects_reserved_delimiters_in_sender_and_sku():
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(order(), shipped(), sender="LAB*WMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+    risky = Order(KEY, "WH-EAST", (OrderLine("1", "SKU~X", 2), OrderLine("2", "SKU-TEE-L", 1)), OrderStatus.SHIPPED)
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(risky, shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)

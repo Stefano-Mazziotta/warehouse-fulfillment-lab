@@ -14,6 +14,15 @@ from .x12 import EdiError
 
 UNIT = "EA"
 ISA_ID_WIDTH = 15
+# Element separator, segment terminator, component separator and line breaks: a data value
+# containing one would add segments or shift fields, so it is rejected, not escaped.
+RESERVED = ("*", "~", ">", "\n", "\r")
+
+
+def _require_plain(**elements: str) -> None:
+    for name, value in elements.items():
+        if any(character in str(value) for character in RESERVED):
+            raise EdiError(f"{name} contains a reserved X12 delimiter: {value!r}")
 
 
 def _envelope(sender: str, receiver: str, control_number: int, group: str, transaction_set: str,
@@ -51,6 +60,9 @@ def _by_sku(pairs) -> dict[str, int]:
 def write_945(order: Order, attempt: ShippingAttempt, *, sender: str, receiver: str,
               control_number: int, sent_at: datetime) -> str:
     _require_shipped(attempt)
+    _require_plain(sender=sender, receiver=receiver, order_id=order.key.order_id,
+                   attempt_id=attempt.attempt_id, tracking_number=attempt.tracking_number,
+                   **{f"sku[{n}]": line.sku for n, line in enumerate(order.lines)})
     ordered = _by_sku((line.sku, line.quantity) for line in order.lines)
     shipped = _by_sku((key.sku, quantity) for key, quantity in attempt.shipped_quantities().items())
     body = [
@@ -68,6 +80,10 @@ def write_856(order: Order, attempt: ShippingAttempt, *, ship_to: str, customer_
               receiver: str, control_number: int, sent_at: datetime) -> str:
     # The lab order has no address or customer PO yet, so the edge supplies both.
     _require_shipped(attempt)
+    _require_plain(sender=sender, receiver=receiver, ship_to=ship_to, customer_po=customer_po,
+                   attempt_id=attempt.attempt_id, tracking_number=attempt.tracking_number,
+                   **{f"sku[{n}]": item.stock_key.sku for n, item in enumerate(
+                       item for package in attempt.packages for item in package.contents)})
     body = [
         f"BSN*00*{attempt.attempt_id}*{sent_at:%Y%m%d}*{sent_at:%H%M}",
         "HL*1**S", "HL*2*1*O", f"PRF*{customer_po}", f"N1*ST*{ship_to}",
