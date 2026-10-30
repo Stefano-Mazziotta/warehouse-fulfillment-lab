@@ -67,7 +67,9 @@ class _Transaction:
         return existing
 
     def save_received_event(self, event_id, source, client_id, payload):
-        self.events.setdefault(event_id, {"status": "RECEIVED", "detail": None, "payload": payload})
+        stored = self.events.setdefault(
+            event_id, {"status": "RECEIVED", "detail": None, "payload": payload})
+        return stored["payload"]
 
     def finish_event(self, event_id, status, detail):
         self.events[event_id].update(status=status.value, detail=detail)

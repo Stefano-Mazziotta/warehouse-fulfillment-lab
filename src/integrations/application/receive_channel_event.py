@@ -2,6 +2,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 
 from integrations.domain.channel_event import ChannelEvent
+from integrations.domain.channel_order import ChannelOrder
 from integrations.domain.ingest_outcome import IngestOutcome
 from integrations.domain.integration_event_status import IntegrationEventStatus
 from messaging.application.idempotent_consumer import IdempotentConsumer
@@ -28,15 +29,17 @@ class ReceiveChannelEvent:
         self._ingest = IngestChannelOrder(source)
 
     def execute(self, event: ChannelEvent) -> IngestOutcome:
-        payload = event.order.to_payload()
         with self._transaction() as transaction:
-            transaction.save_received_event(
-                event.event_id, self._source, event.order.client_id, payload
+            stored = transaction.save_received_event(
+                event.event_id, self._source, event.order.client_id, event.order.to_payload()
             )
+        # The first stored payload wins: a retry of this event ID with another body
+        # must not be processed under, or marked as, the original evidence.
+        order = ChannelOrder.from_payload(stored)
         outcomes: list[IngestOutcome] = []
 
         def handle(transaction: IngestTransaction, message: InboundMessage) -> None:
-            outcome, detail = self._ingest.execute(transaction, event)
+            outcome, detail = self._ingest.execute(transaction, ChannelEvent(event.event_id, order))
             status = (
                 IntegrationEventStatus.FAILED
                 if outcome is IngestOutcome.CONFLICT
@@ -46,7 +49,7 @@ class ReceiveChannelEvent:
             outcomes.append(outcome)
 
         message = InboundMessage(
-            event.event_id, "ChannelOrderUpdated", event.order.client_id, payload
+            event.event_id, "ChannelOrderUpdated", order.client_id, stored
         )
         consumer = IdempotentConsumer(self._transaction, CONSUMER_NAME, handle)
         return outcomes[0] if consumer.handle(message) else IngestOutcome.DUPLICATE_EVENT

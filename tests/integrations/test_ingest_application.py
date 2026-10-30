@@ -101,6 +101,25 @@ def test_processing_failure_keeps_the_raw_event_and_a_retry_succeeds(store, rece
     assert store.events["evt-1"]["status"] == "PROCESSED"
 
 
+def test_first_accepted_payload_stays_authoritative_for_a_retry_with_a_different_order(store, receive):
+    store.fail_on = "c1"
+    with pytest.raises(RuntimeError):
+        receive(event(channel_order("c1"), "evt-same"))
+    store.fail_on = None
+    # Same event ID, another order: the stored c1 is what gets processed.
+    assert receive(event(channel_order("c2"), "evt-same")) is Outcome.CREATED
+    assert set(store.orders) == {OrderKey("owner", "c1")}
+    assert store.events["evt-same"]["payload"]["channel_order_id"] == "c1"
+    assert store.events["evt-same"]["status"] == "PROCESSED"
+
+
+def test_saving_an_event_id_twice_returns_the_first_stored_payload(store):
+    with store.transaction() as transaction:
+        first = transaction.save_received_event("evt-x", SOURCE, "owner", channel_order("c1").to_payload())
+        second = transaction.save_received_event("evt-x", SOURCE, "owner", channel_order("c2").to_payload())
+    assert first["channel_order_id"] == second["channel_order_id"] == "c1"
+
+
 def test_reconciliation_events_of_tenants_that_differ_by_the_delimiter_both_create_their_orders(store, receive):
     first = ChannelEvent.for_reconciliation(channel_order("c", client="a:b"))
     second = ChannelEvent.for_reconciliation(channel_order("b:c", client="a"))

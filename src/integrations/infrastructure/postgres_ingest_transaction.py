@@ -27,13 +27,21 @@ class PostgresIngestTransaction(PostgresOrderTransaction):
 
     def save_received_event(
         self, event_id: str, source: str, client_id: str, payload: Mapping[str, Any]
-    ) -> None:
-        self._connection().execute(
+    ) -> Mapping[str, Any]:
+        connection = self._connection()
+        inserted = connection.execute(
             insert(integration_events)
             .values(id=event_id, source=source, client_id=client_id, payload=payload,
                     status=IntegrationEventStatus.RECEIVED.value, received_at=self._clock())
             .on_conflict_do_nothing(index_elements=["id"])
-        )
+            .returning(integration_events.c.payload)
+        ).scalar_one_or_none()
+        if inserted is not None:
+            return inserted
+        # Another delivery stored it first; its payload stays authoritative.
+        return connection.execute(
+            select(integration_events.c.payload).where(integration_events.c.id == event_id)
+        ).scalar_one()
 
     def finish_event(
         self, event_id: str, status: IntegrationEventStatus, detail: str | None

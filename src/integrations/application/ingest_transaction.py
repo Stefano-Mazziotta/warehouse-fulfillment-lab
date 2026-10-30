@@ -12,7 +12,12 @@ class IngestTransaction(InboxTransaction, OrderTransaction, Protocol):
 
     def save_received_event(
         self, event_id: str, source: str, client_id: str, payload: Mapping[str, Any]
-    ) -> None: ...
+    ) -> Mapping[str, Any]:
+        """Store the raw event unless this ID exists; return the payload that is stored.
+
+        The first accepted payload is authoritative and is never overwritten, so a
+        redelivery with the same ID but another body is processed as the original.
+        """
 
     def finish_event(
         self, event_id: str, status: IntegrationEventStatus, detail: str | None
