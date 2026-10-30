@@ -71,6 +71,9 @@ class RabbitMqConsumerRunner:
                         break
                     continue
                 self._process(channel, method.delivery_tag, properties, body)
+                if should_stop():
+                    break  # the active delivery is committed and acked; prefetched ones are requeued
+            channel.cancel()
         finally:
             if connection.is_open:
                 connection.close()

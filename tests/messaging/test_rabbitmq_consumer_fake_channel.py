@@ -105,3 +105,25 @@ def test_valid_attempt_header_is_incremented_and_retried(monkeypatch):
     runner = make_runner(monkeypatch, channel, failing)
     runner.run(should_stop=lambda: True)
     assert channel.log == [("deliver", 1), ("publish", RETRY, 2), ("ack", 1)]
+
+
+def test_stop_requested_during_a_handler_is_honoured_before_the_next_delivery(monkeypatch):
+    stop, handled = [], []
+
+    def handler(transaction, message):
+        handled.append(message.message_id)
+        stop.append(True)
+
+    channel = FakeChannel([(1, None, body()), (2, None, body()), (3, None, body())])
+    runner = make_runner(monkeypatch, channel, handler)
+    runner.run(should_stop=lambda: bool(stop))
+    assert len(handled) == 1
+    assert channel.log == [("deliver", 1), ("ack", 1)]
+    assert channel.cancelled  # prefetched deliveries 2 and 3 go back to the queue
+
+
+def test_idle_queue_still_stops_on_the_flag(monkeypatch):
+    channel = FakeChannel([])
+    runner = make_runner(monkeypatch, channel, failing)
+    runner.run(should_stop=lambda: True)
+    assert channel.log == []
