@@ -82,10 +82,13 @@ Both are graphql-core validation rules, so a rejected query runs no resolver.
 
 - Depth: at most 7 levels, introspection included (`__schema { types { fields { type
   { ofType ... } } } }` is a classic abuse). Code `QUERY_TOO_DEEP`.
-- Cost: every field costs 1 and a field with `first` multiplies its subtree by that page
-  size, read from the request variables. Limit 1000. The same nested page costs 701 with
-  `first: 20` and 1751 with `first: 50`, so the second is rejected with `QUERY_TOO_COMPLEX`.
-  Aliases and fragments count; a fragment cycle cannot hang the rule.
+- Cost: every field costs 1 and a field with `first` multiplies its subtree by the page size
+  the resolver will really return: the literal, the variable's value or declared default,
+  or the configured default (20) when `first` is omitted or null. Limit 1000. The same
+  nested page costs 701 with `first: 20` (or no `first`) and 1751 with `first: 50`, so the
+  second is rejected with `QUERY_TOO_COMPLEX`. Aliases and fragments count. Each fragment
+  is measured once per request, so a small document of fragments spreading each other
+  cannot make the rules do exponential work, and a fragment cycle cannot hang them.
 - `first` is capped at 50 (default 20) and violations are `BAD_USER_INPUT`.
 
 Not done: per-client rate limiting (needs shared state to be meaningful across workers),

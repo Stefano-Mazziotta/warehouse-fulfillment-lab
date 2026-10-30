@@ -12,12 +12,13 @@ from api.graphql.depth_limit_rule import depth_limit_rule
 from api.graphql.schema_factory import build_schema
 from test_sales_channel_webhook import event
 
-FULL_PAGE = """query($first: Int) { orders(first: $first) { nodes {
+PAGE_BODY = """{ nodes {
     orderId lines { lineId sku quantity }
     reservations { lineId sku warehouseId locationId quantity pickedQuantity }
     packages { packageId contents { lineId sku quantity } }
     shipment { attemptId status trackingNumber packageIds } }
-    pageInfo { hasNextPage endCursor } } }"""
+    pageInfo { hasNextPage endCursor } }"""
+FULL_PAGE = f"query($first: Int) {{ orders(first: $first) {PAGE_BODY} }}"
 
 
 def test_invalid_webhook_payloads_are_rejected_before_the_use_case(adapter_lab):
@@ -59,6 +60,34 @@ def test_aliases_cannot_multiply_cost_past_the_limit(adapter_lab):
 def test_fragment_cycles_are_rejected_without_hanging(adapter_lab):
     cyclic = "{ orders { nodes { ...A } } } fragment A on Order { orderId ...B } fragment B on Order { ...A }"
     assert "errors" in adapter_lab.gql(cyclic)
+
+
+def two_pages(arguments: str, declaration: str = "") -> str:
+    """The same full page twice under aliases: 2 x 701 = 1402 when each page is 20 rows."""
+    pages = " ".join(f"{alias}: orders{arguments} {PAGE_BODY}" for alias in ("a", "b"))
+    return f"query{declaration} {{ {pages} }}"
+
+
+def test_omitting_first_is_priced_as_the_default_page_size(adapter_lab):
+    for query, variables in (
+        (two_pages("(first: 20)"), None),
+        (two_pages(""), None),
+        (two_pages("(first: null)"), None),
+        (two_pages("(first: $first)", "($first: Int = 20)"), None),
+        (two_pages("(first: $first)", "($first: Int)"), None),
+        (two_pages("(first: $first)", "($first: Int)"), {"first": None}),
+        (two_pages("(first: $first)", "($first: Int = 1)"), {"first": None}),
+    ):
+        assert adapter_lab.error_codes(query, variables) == ["QUERY_TOO_COMPLEX"], query
+
+
+def test_a_smaller_explicit_or_default_page_stays_within_the_budget(adapter_lab):
+    for query, variables in (
+        (two_pages("(first: 5)"), None),
+        (two_pages("(first: $first)", "($first: Int = 5)"), None),
+        (two_pages("(first: $first)", "($first: Int = 50)"), {"first": 5}),
+    ):
+        assert "QUERY_TOO_COMPLEX" not in adapter_lab.error_codes(query, variables), query
 
 
 def doubling_fragments(type_name: str, leaf: str, link: str, levels: int) -> str:

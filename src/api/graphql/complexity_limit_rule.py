@@ -5,7 +5,9 @@ from graphql import (
     FieldNode,
     FragmentDefinitionNode,
     GraphQLError,
+    GraphQLObjectType,
     IntValueNode,
+    NullValueNode,
     OperationDefinitionNode,
     ValidationRule,
     VariableNode,
@@ -15,20 +17,32 @@ from .query_selection_walker import child_parts
 
 
 def complexity_limit_rule(
-    max_complexity: int, assumed_page_size: int, variables: Mapping[str, Any]
+    max_complexity: int, default_page_size: int, max_page_size: int, variables: Mapping[str, Any]
 ) -> type[ValidationRule]:
     class ComplexityLimit(ValidationRule):
-        """Every field costs 1; a field taking `first` multiplies its subtree by that page size.
+        """Every field costs 1; a field taking `first` multiplies its subtree by its page size.
 
-        A variable page size is read from the request's variables; if it is not a usable integer
-        it is priced at the largest page the server would accept.
+        The page size is what the resolver will return: the literal, the variable's value, the
+        variable's declared default, or the configured default when `first` is omitted or null.
+        A value that is not a usable integer is priced at the largest page the server accepts.
         """
 
         def __init__(self, context) -> None:
             super().__init__(context)
             self._fragment_costs: dict[str, int] = {}
+            self._variable_defaults: dict[str, Any] = {}
+            self._paged_fields = {
+                name
+                for type_ in context.schema.type_map.values() if isinstance(type_, GraphQLObjectType)
+                for name, field in type_.fields.items() if "first" in field.args
+            }
 
         def enter_operation_definition(self, node: OperationDefinitionNode, *_) -> None:
+            self._fragment_costs = {}  # a fragment's price depends on the operation's variables
+            self._variable_defaults = {
+                definition.variable.name.value: definition.default_value
+                for definition in node.variable_definitions or ()
+            }
             cost = self._cost_of_children(node.selection_set)
             if cost > max_complexity:
                 self.report_error(GraphQLError(
@@ -57,18 +71,28 @@ def complexity_limit_rule(
                 self._fragment_costs[name] = self._cost_of_children(fragment.selection_set)
             return self._fragment_costs[name]
 
-        @staticmethod
-        def _multiplier(field: FieldNode) -> int:
+        def _multiplier(self, field: FieldNode) -> int:
+            if field.name.value not in self._paged_fields:
+                return 1
             for argument in field.arguments or ():
-                if argument.name.value != "first":
-                    continue
-                if isinstance(argument.value, IntValueNode):
-                    return max(int(argument.value.value), 1)
-                if isinstance(argument.value, VariableNode):
-                    value = variables.get(argument.value.name.value)
-                    if type(value) is int:
-                        return max(value, 1)
-                return assumed_page_size
-            return 1
+                if argument.name.value == "first":
+                    return self._page_size(argument.value)
+            return min(default_page_size, max_page_size)
+
+        def _page_size(self, value) -> int:
+            if isinstance(value, VariableNode):
+                name = value.name.value
+                if name in variables:
+                    given = variables[name]
+                    if given is None:
+                        return min(default_page_size, max_page_size)
+                    return max(given, 1) if type(given) is int else max_page_size
+                declared = self._variable_defaults.get(name)
+                return self._page_size(declared) if declared is not None else min(default_page_size, max_page_size)
+            if isinstance(value, IntValueNode):
+                return max(int(value.value), 1)
+            if isinstance(value, NullValueNode):
+                return min(default_page_size, max_page_size)
+            return max_page_size
 
     return ComplexityLimit
