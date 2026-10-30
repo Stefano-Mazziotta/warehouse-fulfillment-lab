@@ -1,6 +1,8 @@
 """Fresh READ COMMITTED transaction: order lock, then sorted stock locks."""
 
+from collections.abc import Mapping
 from types import TracebackType
+from typing import Any
 
 from sqlalchemy import Connection, Engine, Table, and_, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
@@ -23,6 +25,17 @@ from .order_schema import order_lines, orders, reservations
 
 def order_identity(table: Table, key: OrderKey) -> ColumnElement[bool]:
     return and_(table.c.client_id == key.client_id, table.c.order_id == key.order_id)
+
+
+def _package_item_from_row(key: OrderKey, row: Mapping[str, Any]) -> PackageItem:
+    stock_key = InventoryKey(row["client_id"], row["sku"], row["warehouse_id"], row["location_id"])
+    return PackageItem(key, row["line_id"], stock_key, row["quantity"])
+
+
+def _package_from_row(key: OrderKey, row: Mapping[str, Any],
+                      contents: tuple[PackageItem, ...]) -> Package:
+    return Package(key, row["package_id"], row["weight_grams"], row["length_mm"],
+                   row["width_mm"], row["height_mm"], contents)
 
 
 class PostgresOrderTransaction:
@@ -249,12 +262,9 @@ class PostgresOrderTransaction:
             select(package_items).where(order_identity(package_items, key))).mappings()
         by_package: dict[str, list[PackageItem]] = {}
         for row in contents:
-            by_package.setdefault(row["package_id"], []).append(PackageItem(
-                key, row["line_id"], InventoryKey(row["client_id"], row["sku"],
-                row["warehouse_id"], row["location_id"]), row["quantity"]))
-        return tuple(Package(key, row["package_id"], row["weight_grams"], row["length_mm"],
-                             row["width_mm"], row["height_mm"],
-                             tuple(by_package.get(row["package_id"], ()))) for row in headers)
+            by_package.setdefault(row["package_id"], []).append(_package_item_from_row(key, row))
+        return tuple(_package_from_row(key, row, tuple(by_package.get(row["package_id"], ())))
+                     for row in headers)
 
     def add_package(self, package: Package) -> None:
         if package.order_key not in self._locked_orders:
