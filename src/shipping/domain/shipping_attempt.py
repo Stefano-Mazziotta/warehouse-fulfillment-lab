@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, replace
 from uuid import NAMESPACE_URL, uuid5
 
@@ -34,7 +35,10 @@ class ShippingAttempt:
     def open(cls, order_key: OrderKey, packages: tuple[Package, ...]) -> "ShippingAttempt":
         # Deterministic from the order: a crash before the first persist cannot
         # fork the carrier-side identity, because the order has one attempt ever.
-        attempt_id = str(uuid5(NAMESPACE_URL, f"shipping-attempt/{order_key.client_id}/{order_key.order_id}"))
+        # JSON encodes the pair unambiguously; joining with "/" would let ("a/b", "c") and
+        # ("a", "b/c") hash to the same attempt, because both identifiers may contain it.
+        identity = json.dumps(["shipping-attempt", order_key.client_id, order_key.order_id], separators=(",", ":"))
+        attempt_id = str(uuid5(NAMESPACE_URL, identity))
         return cls(order_key, attempt_id, tuple(packages))
 
     @property

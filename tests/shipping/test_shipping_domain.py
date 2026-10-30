@@ -120,3 +120,14 @@ def test_balance_ship_consumes_on_hand_allocated_and_picked_only():
     for quantity in (0, -1, True, 4):
         with pytest.raises(InventoryError):
             balance.ship(quantity)
+
+
+def test_attempt_ids_differ_for_keys_that_only_differ_by_where_the_separator_falls():
+    def open_for(key):
+        stock = InventoryKey(key.client_id, "sku", "warehouse", "a")
+        box = Package(key, "p1", 100, 200, 150, 100, (PackageItem(key, "one", stock, 1),))
+        return ShippingAttempt.open(key, (box,))
+
+    first, second = open_for(OrderKey("a/b", "c")), open_for(OrderKey("a", "b/c"))
+    assert first.attempt_id != second.attempt_id
+    assert first.attempt_id == open_for(OrderKey("a/b", "c")).attempt_id  # still deterministic
