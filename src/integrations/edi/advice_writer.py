@@ -45,7 +45,10 @@ def _envelope(sender: str, receiver: str, control_number: int, group: str, trans
     return "\n".join(rows) + "\n"
 
 
-def _require_shipped(attempt: ShippingAttempt) -> None:
+def _require_shipped(order: Order, attempt: ShippingAttempt) -> None:
+    # Advice claims "this order shipped": the attempt must be this order's, tenant included.
+    if order.key != attempt.order_key:
+        raise EdiError(f"Attempt {attempt.attempt_id!r} does not belong to order {order.key.order_id!r}")
     if attempt.status != ShipmentStatus.SHIPPED:
         raise EdiError("Advice can only be written for a SHIPPED attempt")
 
@@ -59,7 +62,7 @@ def _by_sku(pairs) -> dict[str, int]:
 
 def write_945(order: Order, attempt: ShippingAttempt, *, sender: str, receiver: str,
               control_number: int, sent_at: datetime) -> str:
-    _require_shipped(attempt)
+    _require_shipped(order, attempt)
     _require_plain(sender=sender, receiver=receiver, order_id=order.key.order_id,
                    attempt_id=attempt.attempt_id, tracking_number=attempt.tracking_number,
                    **{f"sku[{n}]": line.sku for n, line in enumerate(order.lines)})
@@ -79,7 +82,7 @@ def write_945(order: Order, attempt: ShippingAttempt, *, sender: str, receiver: 
 def write_856(order: Order, attempt: ShippingAttempt, *, ship_to: str, customer_po: str, sender: str,
               receiver: str, control_number: int, sent_at: datetime) -> str:
     # The lab order has no address or customer PO yet, so the edge supplies both.
-    _require_shipped(attempt)
+    _require_shipped(order, attempt)
     _require_plain(sender=sender, receiver=receiver, ship_to=ship_to, customer_po=customer_po,
                    attempt_id=attempt.attempt_id, tracking_number=attempt.tracking_number,
                    **{f"sku[{n}]": item.stock_key.sku for n, item in enumerate(

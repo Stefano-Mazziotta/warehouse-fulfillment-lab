@@ -175,3 +175,17 @@ def test_945_rejects_reserved_delimiters_in_sender_and_sku():
     with pytest.raises(EdiError, match="reserved"):
         write_945(risky, shipped(), sender="LABWMS", receiver="ACMEBRANDS",
                   control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("other", [OrderKey("OTHER", "SO-1001"), OrderKey("ACMEBRANDS", "NEVER-SHIPPED")])
+@pytest.mark.parametrize("write", ["945", "856"])
+def test_advice_is_refused_when_the_order_does_not_own_the_shipped_attempt(write, other):
+    foreign = Order(other, "WH-EAST", (OrderLine("1", "SKU-MUG-RED", 2),), OrderStatus.CREATED)
+
+    with pytest.raises(EdiError, match="does not belong"):
+        if write == "945":
+            write_945(foreign, shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                      control_number=1, sent_at=SENT_AT)
+        else:
+            write_856(foreign, shipped(), ship_to="X", customer_po="PO", sender="ACMEBRANDS",
+                      receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
