@@ -3,8 +3,13 @@
 Every request here is rejected before a use case runs, so the services are fakes that
 fail the test if they are called.
 """
-from api_support import build_adapter_lab
+import time
 
+from api_support import build_adapter_lab
+from graphql import parse, validate
+
+from api.graphql.depth_limit_rule import depth_limit_rule
+from api.graphql.schema_factory import build_schema
 from test_sales_channel_webhook import event
 
 FULL_PAGE = """query($first: Int) { orders(first: $first) { nodes {
@@ -54,6 +59,32 @@ def test_aliases_cannot_multiply_cost_past_the_limit(adapter_lab):
 def test_fragment_cycles_are_rejected_without_hanging(adapter_lab):
     cyclic = "{ orders { nodes { ...A } } } fragment A on Order { orderId ...B } fragment B on Order { ...A }"
     assert "errors" in adapter_lab.gql(cyclic)
+
+
+def doubling_fragments(type_name: str, leaf: str, link: str, levels: int) -> str:
+    """F0 is a leaf; each Fi spreads F(i-1) twice. Tiny text, 2**levels expansions if walked naively."""
+    first = f"fragment F0 on {type_name} {{ {leaf} }}"
+    rest = (f"fragment F{n} on {type_name} {{ {link}...F{n - 1} ...F{n - 1} {'}' if link else ''} }}"
+            for n in range(1, levels + 1))
+    return " ".join([first, *rest])
+
+
+def test_a_doubling_fragment_dag_is_rejected_quickly_by_the_cost_rule(adapter_lab):
+    query = "{ orders { nodes { ...F30 } } } " + doubling_fragments("Order", "orderId", "", 30)
+    started = time.perf_counter()
+    codes = adapter_lab.error_codes(query)
+    assert time.perf_counter() - started < 1
+    assert "QUERY_TOO_COMPLEX" in codes
+
+
+def test_a_doubling_fragment_dag_is_measured_quickly_by_the_depth_rule(adapter_lab):
+    # Run alone: graphql-core's own overlapping-fields rule is exponential on this shape.
+    schema = build_schema(adapter_lab.config)._schema
+    query = "{ __schema { types { ...F30 } } } " + doubling_fragments("__Type", "name", "ofType {", 30)
+    started = time.perf_counter()
+    errors = validate(schema, parse(query), [depth_limit_rule(adapter_lab.config.max_query_depth)])
+    assert time.perf_counter() - started < 1
+    assert [error.extensions["code"] for error in errors] == ["QUERY_TOO_DEEP"]
 
 
 def test_limits_come_from_configuration():
