@@ -1,9 +1,10 @@
 """Shared wiring for API proofs: a real Flask app over a disposable PostgreSQL schema."""
 import os
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import Engine, insert
+from sqlalchemy import Engine, create_engine, insert
 
 from api.api_services import ApiServices
 from api.app_config import AppConfig
@@ -50,6 +51,24 @@ def build_lab(engine: Engine, **config_overrides) -> LabApi:
     config = AppConfig(database_url=os.environ["LAB_TEST_DATABASE_URL"], **config_overrides)
     services = compose_services(engine, config)
     return attach(engine, config, services)
+
+
+def build_adapter_lab(receive=None, **config_overrides) -> LabApi:
+    """A real Flask app over fake services and no database: for transport-level contracts.
+
+    Only the boundaries that run before any use case (JSON parsing, headers, query
+    validation rules) may be proven with this. SQL, isolation and persistence proofs
+    keep using `build_lab`.
+    """
+    engine = create_engine("sqlite://")
+    config = AppConfig(database_url="sqlite://", **config_overrides)
+    services = SimpleNamespace(receive_channel_event=receive or _UnexpectedCall())
+    return attach(engine, config, services)
+
+
+class _UnexpectedCall:
+    def execute(self, *_):
+        raise AssertionError("the use case must not run for a rejected request")
 
 
 def attach(engine: Engine, config: AppConfig, services: ApiServices) -> LabApi:
