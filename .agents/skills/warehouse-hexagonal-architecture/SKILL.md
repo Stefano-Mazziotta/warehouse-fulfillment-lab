@@ -1,6 +1,6 @@
 ---
 name: warehouse-hexagonal-architecture
-description: Design, explain, review, and refactor Python ports and adapters in warehouse-fulfillment-lab using domain-first vertical slices and thin Flask/GraphQL adapters. Use for inventory, order, picking, packing, shipping, messaging, or integration changes involving dependency direction, Protocol ports, transactions, idempotency, or infrastructure coupling. Preserve the mentor-first learning workflow; do not use for unrelated projects or cosmetic edits.
+description: Model and review Python WMS domain boundaries, aggregates, value objects, use cases, and ports/adapters in warehouse-fulfillment-lab. Use for DDD, consistency boundaries, dependency inversion, cross-capability integration, or architecture refactoring. Coordinate with the Flask API and backend reliability skills when a task crosses those boundaries. Preserve mentor-first learning; avoid routine CRUD ceremony and unrelated projects.
 ---
 
 # Warehouse Hexagonal Architecture
@@ -29,6 +29,25 @@ description: Design, explain, review, and refactor Python ports and adapters in 
 Start with the warehouse operation, actor, inputs, result, valid transitions,
 invariants, and consistency boundary. Prefer names such as `AllocateOrder`,
 `RecordPick`, and `ShipOrder` to generic status setters and CRUD services.
+
+Use DDD to clarify business language/consistency, Clean Architecture to govern
+source dependencies, and ports/adapters to isolate I/O. Keep simple reads/CRUD
+simple. Do not derive bounded contexts from folders or require a service per
+context. Identify known, proposed and missing rules; ask about an unknown rule
+only when it blocks the task and continue independent work. Do not invent
+partial-allocation, cancellation, or return policies.
+
+Distinguish entity identity from value-object equality. Protect invariants through
+behavior rather than arbitrary status mutation. Choose aggregate boundaries from
+atomic rules and contention, not entity counts. Preserve justified cross-aggregate
+local transactions; do not replace required allocation atomicity with eventual
+consistency to satisfy an aggregate-per-transaction slogan. Translate external
+channel/carrier concepts at the integration boundary.
+
+Choose CQRS only when read/write requirements justify it. A query adapter or
+DynamoDB projection does not require separate services. An outbox is delivery
+history, not automatically an event store; do not claim replay reconstructs facts
+the application never recorded.
 
 | Boundary | Responsibility | Allowed dependencies |
 | --- | --- | --- |
@@ -157,5 +176,7 @@ fit a pattern.
 
 Adapted for this repository from Affaan Mustafa's ECC
 [hexagonal-architecture skill](https://github.com/affaan-m/ecc/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/skills/hexagonal-architecture/SKILL.md),
-listed on [skills.sh](https://www.skills.sh/affaan-m/ecc/hexagonal-architecture).
-Preserve the bundled [MIT license](LICENSE) when redistributing this adaptation.
+and robust-skills contributors'
+[clean-ddd-hexagonal](https://github.com/ccheney/robust-skills/blob/0eea7b060d12e3520556a73b15fbfa79480987d1/skills/clean-ddd-hexagonal/SKILL.md).
+Read [source decisions](references/source-decisions.md) for the three-source
+synthesis and deliberate exclusions. Preserve the bundled [MIT notices](LICENSE).

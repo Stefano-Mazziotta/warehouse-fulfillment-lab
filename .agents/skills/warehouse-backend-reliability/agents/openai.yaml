@@ -1,0 +1,4 @@
+interface:
+  display_name: "Warehouse Backend Reliability"
+  short_description: "Transactions, messaging, and quality gates for the WMS"
+  default_prompt: "Use $warehouse-backend-reliability to trace this WMS operation through its commits, retries, dependencies, and verification evidence."
