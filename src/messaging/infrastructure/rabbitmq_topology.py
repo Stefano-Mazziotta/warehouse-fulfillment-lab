@@ -15,6 +15,10 @@ class RabbitMqTopology:
 
         events (topic) --routing key--> <queue> --fail--> <queue>.retry --TTL expires-->
         (default exchange, routing key <queue>) --> <queue> ... --max attempts--> <queue>.dlq
+
+    The TTL expiry hop is NOT confirmed: default dead-lettering is not at-least-once, so a
+    message can be dropped if <queue> is missing or unavailable at expiry. Recover with
+    reconciliation (see docs/study/messaging.md).
     """
 
     exchange: str = "fulfillment.events"

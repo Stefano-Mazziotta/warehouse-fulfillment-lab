@@ -25,6 +25,7 @@ class RabbitMqConsumerRunner:
     `<queue>.dlq` once max_attempts handler runs have failed, and only then is the
     original acked. If that republish fails the exception propagates, the connection
     closes and the broker redelivers the original: a duplicate is possible, a loss is not.
+    The later TTL expiry hop out of the retry queue is broker-managed and best effort.
     Only `Exception` is treated as a handler failure.
     """
 

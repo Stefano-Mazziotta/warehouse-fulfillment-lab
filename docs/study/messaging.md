@@ -37,7 +37,7 @@ implements the port, so domain and application code never import SQLAlchemy.
 
 The unavoidable gap: the broker accepts the message, then the process dies before the
 commit. The row is still `PENDING`, so the next run publishes it again. That is
-**at-least-once**: duplicates are normal, loss is not. Exactly-once delivery does not
+**at-least-once**: duplicates are normal, and loss is avoided on the outbox-to-broker path (the retry TTL hop is a documented exception, see below). Exactly-once delivery does not
 exist across two systems; we get exactly-once EFFECT by making consumers idempotent.
 
 ### Failures, backoff, DEAD
@@ -112,6 +112,15 @@ implement the existing ports; domain and application never import `pika`.
   Unreadable bodies skip retries. Trade-off: republish-then-ack is not atomic, so a crash
   in between duplicates the message (again absorbed by the inbox); the DLQ needs a human
   or a replay tool, which the lab does not build.
+- **Known gap: the TTL hop is best effort.** A publisher confirm covers publication into
+  `<queue>.retry`, not the broker-managed dead-letter transfer back to the work queue
+  when the TTL expires. The default dead-lettering is not at-least-once
+  ([RabbitMQ DLX safety](https://www.rabbitmq.com/docs/3.13/dlx#safety)): if the work
+  queue is missing or unavailable at expiry (for example during topology repair), the
+  message can be dropped. The outbox row is already `PUBLISHED`, so the relay will not
+  resend it. Recovery for the lab: run reconciliation (replay by `updated_at` or cursor)
+  for the affected window. Production options: a retry worker that republishes with a
+  confirm, or quorum queues with `dead-letter-strategy: at-least-once`.
 - **Prefetch** bounds unacked messages per consumer, so a slow handler cannot hoard the
   queue and memory stays bounded.
 - **Ordering** is still not guaranteed: retries reorder messages by design.
