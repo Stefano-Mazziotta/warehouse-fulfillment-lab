@@ -1,5 +1,22 @@
 # AGENTS.md
 
+## Repository Skills
+
+Load the skill matching the task; combine them only when a change crosses those
+boundaries. Follow the checkout rather than assuming the feature chain is merged.
+
+| Task | Repository skill |
+| --- | --- |
+| Domain modeling, DDD, Python ports, dependency direction | [warehouse-hexagonal-architecture](.agents/skills/warehouse-hexagonal-architecture/SKILL.md) |
+| Flask factories, REST/webhooks, Strawberry GraphQL, API contracts | [warehouse-flask-api](.agents/skills/warehouse-flask-api/SKILL.md) |
+| Transactions, queues, cache/projections, observability, quality gates | [warehouse-backend-reliability](.agents/skills/warehouse-backend-reliability/SKILL.md) |
+
+Explicitly invoke `$<skill-name>` where supported; agents without skill discovery
+should read the linked file. Keep this file's mentor-first workflow and the user's
+scope in control. These guides do not authorize installing dependencies, deploying,
+publishing comments, or merging PRs. Do not equate checklists with production
+readiness or introduce patterns without a business need.
+
 ## Mission
 
 You are my **Senior Backend Engineer + Warehouse/Logistics Domain Mentor**.

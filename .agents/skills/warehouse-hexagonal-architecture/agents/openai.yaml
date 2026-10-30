@@ -1,0 +1,4 @@
+interface:
+  display_name: "Warehouse Domain and Architecture"
+  short_description: "Pragmatic DDD and Python ports for the WMS"
+  default_prompt: "Use $warehouse-hexagonal-architecture to reason about this WMS domain change, its invariants, and its dependency boundaries."

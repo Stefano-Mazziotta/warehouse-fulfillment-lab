@@ -1,0 +1,4 @@
+interface:
+  display_name: "Warehouse Flask API"
+  short_description: "Flask and GraphQL contracts for the Python WMS"
+  default_prompt: "Use $warehouse-flask-api to implement or review this WMS API change with explicit validation, safe errors, and isolated adapter tests."
