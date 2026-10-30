@@ -27,7 +27,8 @@ implements the port, so domain and application code never import SQLAlchemy.
   shipped) takes the early return and records nothing.
 - `message_id` is derived (`OrderShipped:owner:order`). Each fact happens once per
   order, so the ID is stable, consumers can dedupe on it, and the primary key is a
-  safety net against double recording.
+  safety net against double recording. Each part is percent-encoded, so a `:` inside a
+  client or order ID cannot make two different orders share an ID.
 
 ## The relay and at-least-once delivery
 

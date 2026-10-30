@@ -14,6 +14,14 @@ from messaging.domain.retry_policy import RetryPolicy
 from in_memory_messaging import START, event, pending
 
 
+def test_event_identity_cannot_collide_across_clients_that_differ_by_the_delimiter():
+    first = order_allocated("a:b", "c", "w1", [("l1", "sku", 1)])
+    second = order_allocated("a", "b:c", "w1", [("l1", "sku", 1)])
+    assert first.message_id != second.message_id
+    assert first.message_id == order_allocated("a:b", "c", "w1", [("l1", "sku", 1)]).message_id
+    assert "%" not in event().message_id  # ordinary identifiers keep their readable form
+
+
 def test_event_identity_is_stable_per_business_fact():
     assert event().message_id == "OrderAllocated:owner:order"
     assert event().message_id == event().message_id
