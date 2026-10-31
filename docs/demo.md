@@ -1,5 +1,7 @@
 # End-to-end demo
 
+> New to the layout? [System workflow in diagrams](system-workflow.md) draws the architecture and the flows this demo walks through.
+
 One command runs a whole order through the lab: stock is received, the order moves from
 `CREATED` to `SHIPPED` through the GraphQL API, and at every step you see where the data
 lives: PostgreSQL (the truth), the outbox, RabbitMQ, the DynamoDB read model, the Valkey
