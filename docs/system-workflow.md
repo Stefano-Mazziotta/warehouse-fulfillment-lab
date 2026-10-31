@@ -24,7 +24,7 @@ The diagrams are [Mermaid](https://mermaid.js.org/), so GitHub renders them in p
 | Two workers, one unit of stock | [5.2 Allocation race](#52-allocation-race-the-last-unit) |
 | How a change becomes an event and a read model | [5.3 Commit to projection](#53-from-commit-to-read-model) |
 | A carrier that times out after shipping | [5.4 Unknown carrier outcome](#54-shipping-when-the-carrier-response-is-lost) |
-| Duplicate and lost webhooks | [5.5 Webhook](#55-webhook-ingest-and-duplicates) and [5.6 Reconciliation](#56-reconciliation-polling-repairs-lost-events) |
+| Duplicate and lost webhooks | [5.5 Webhook](#55-webhook-ingest-and-duplicates) and [5.6 Reconciliation](#56-reconciliation-polling-repairs-lost-inbound-channel-events) |
 | Retries and the dead-letter queue | [5.7 Consumer retries](#57-consumer-retries-and-the-dead-letter-queue) |
 | The cache | [5.8 Cache-aside read](#58-cache-aside-read) |
 
@@ -345,7 +345,9 @@ Proof: `src/orders/infrastructure/postgres_order_transaction.py`, drill 1 in
 ### 5.3 From commit to read model
 
 The event is part of the business transaction, so it cannot be lost or invented. Delivery
-afterwards is **at-least-once**; the inbox makes the effect happen **once**.
+afterwards is **at-least-once**. Repeats are harmless because of **two separate guards**: the
+PostgreSQL inbox suppresses a delivery once its row has committed, and the DynamoDB writes
+are idempotent on their own, which covers the window before that commit.
 
 ```mermaid
 sequenceDiagram
@@ -364,15 +366,22 @@ sequenceDiagram
   MQ-->>R: confirm
   R->>PG: mark PUBLISHED, commit
   MQ->>C: deliver (prefetch 10)
-  C->>PG: insert inbox row, run projector, one transaction
+  C->>PG: open transaction, insert inbox row
   C->>D: set facts, then set status only if stage is newer
-  C->>PG: commit
+  Note over C,D: DynamoDB is outside the PostgreSQL transaction
+  C->>PG: commit the inbox row
   C->>MQ: ack
 ```
 
 - A crash between publish and "mark PUBLISHED" re-publishes the row: a duplicate, never a loss.
-- A crash between commit and ack redelivers the message: the inbox insert conflicts, so
-  nothing runs twice.
+- A crash between the inbox commit and the ack redelivers the message: the inbox insert
+  conflicts, so the projector does not run again.
+- **A crash between the DynamoDB write and the inbox commit** is the gap the inbox cannot
+  close. The projection has already changed, but the inbox row rolls back, so the redelivery
+  runs the projector a second time. That is safe only because the projection's own writes are
+  idempotent: the facts are unconditional sets of the same values, and the status write is
+  guarded by `attribute_not_exists(stage) OR stage < :stage`. The inbox makes the *local*
+  effect atomic with the dedupe record; it cannot do that for a remote store.
 - Out-of-order events cannot move the read model backwards: the stage condition rejects them.
 
 ### 5.4 Shipping when the carrier response is lost
@@ -439,9 +448,11 @@ Outcomes: `CREATED`, `ALREADY_KNOWN`, `STALE_IGNORED`, `CONFLICT`, `DUPLICATE_EV
 means "received and handled by policy", not "business success": always read `outcome`. The
 full contract is [`api/sales-channel-webhook.md`](api/sales-channel-webhook.md).
 
-### 5.6 Reconciliation polling repairs lost events
+### 5.6 Reconciliation polling repairs lost inbound channel events
 
-A webhook can be lost, so the system also polls. The checkpoint never moves backwards, and
+A webhook can be lost, so the system also polls the sales channel. This repairs *incoming*
+orders only: it does not replay the fulfillment outbox and does not touch RabbitMQ or
+DynamoDB (for a stale projection, see 5.7). The checkpoint never moves backwards, and
 each run re-reads an **overlap window** so late orders are not missed.
 
 ```mermaid
@@ -494,8 +505,17 @@ sequenceDiagram
 ```
 
 The hop out of the retry queue is done by the broker and is **not confirmed**. If the work
-queue is missing at that moment the message can be dropped; reconciliation is the recovery.
-See [`study/messaging.md`](study/messaging.md).
+queue is missing at that moment the message can be dropped, and the outbox row is already
+`PUBLISHED`, so the relay will not resend it.
+
+**Recovery for the projection** is `order_projection_cli rebuild`: it wipes the derived
+DynamoDB table and replays every retained `order` outbox row, whatever its delivery status
+([rebuild procedure](study/order-projection.md#rebuild)). Channel reconciliation (5.6) is *not*
+a recovery for this: it polls the sales channel, and an order it already knows simply returns
+`ALREADY_KNOWN` while its lost `OrderPacked` or `OrderShipped` event stays missing.
+
+Not implemented: a generic replay tool for the retry queue or the DLQ, and a replay of only
+the affected window. See [`study/messaging.md`](study/messaging.md).
 
 ### 5.8 Cache-aside read
 
@@ -538,7 +558,9 @@ someone asks.
 | No stock-receiving use case | The demo seeds stock with SQL. |
 | `X-Client-Id` is not authentication | A real deployment verifies a credential at the edge. |
 | The webhook is unsigned | Verify the sender's signature before parsing. |
-| Retry-queue TTL hop is best effort | Reconciliation replays the affected window. |
+| Retry-queue TTL hop is best effort | Run `order_projection_cli rebuild` for the projection. There is no affected-window replay. |
+| No replay tool for the DLQ or the retry queue | Parked messages need a human, or a projection rebuild. |
+| The inbox cannot make DynamoDB writes atomic with PostgreSQL | The projection's idempotent, conditional writes absorb the repeat (see 5.3). |
 
 ## 7. Where to read next
 

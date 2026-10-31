@@ -118,9 +118,13 @@ implement the existing ports; domain and application never import `pika`.
   ([RabbitMQ DLX safety](https://www.rabbitmq.com/docs/3.13/dlx#safety)): if the work
   queue is missing or unavailable at expiry (for example during topology repair), the
   message can be dropped. The outbox row is already `PUBLISHED`, so the relay will not
-  resend it. Recovery for the lab: run reconciliation (replay by `updated_at` or cursor)
-  for the affected window. Production options: a retry worker that republishes with a
-  confirm, or quorum queues with `dead-letter-strategy: at-least-once`.
+  resend it. Recovery for the lab's projection consumer: `order_projection_cli rebuild`,
+  which wipes the derived table and replays the retained outbox rows (see
+  [order-projection.md](order-projection.md#rebuild)). Channel reconciliation does **not**
+  repair this: it polls incoming sales-channel orders, not the outbox or DynamoDB. A generic
+  retry/DLQ replay tool and an affected-window replay are not implemented. Production
+  options: a retry worker that republishes with a confirm, or quorum queues with
+  `dead-letter-strategy: at-least-once`.
 - **Prefetch** bounds unacked messages per consumer, so a slow handler cannot hoard the
   queue and memory stays bounded.
 - **Ordering** is still not guaranteed: retries reorder messages by design.
