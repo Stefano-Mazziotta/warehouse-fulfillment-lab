@@ -7,3 +7,6 @@ build/
 dist/
 logs/*
 !logs/.gitkeep
+
+# Local environment
+.env
