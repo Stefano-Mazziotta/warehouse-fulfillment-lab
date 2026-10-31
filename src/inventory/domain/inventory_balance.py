@@ -73,12 +73,12 @@ class InventoryBalance:
         return replace(self, allocated=self.allocated - quantity)
 
     def pick(self, quantity: int) -> "InventoryBalance":
-        """Record units physically picked for allocated work.
-
-        Hint: picked is a subset of allocated, so repeated partial picks must
-        not let picked exceed allocated. Picking does not change available.
-        """
-        raise NotImplementedError
+        """Record a positive delta within allocated stock, without moving stock."""
+        if type(quantity) is not int or quantity <= 0:
+            raise InventoryError("picked quantity must be a positive integer")
+        if quantity > self.allocated - self.picked:
+            raise InventoryError("picked cannot exceed allocated")
+        return replace(self, picked=self.picked + quantity)
 
     def pack(self, quantity: int) -> "InventoryBalance":
         """Record picked units placed into package(s)."""

@@ -23,7 +23,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T1b | T1a | domain proofs pass | delegated: persistence/config | persistence worker | inventory application/infrastructure, migrations, Compose, pyproject, integration tests | real PostgreSQL concurrent last-unit + rollback/isolation/migrations | [x] |
 | T2 | T1b | concurrency proof passes | delegated: multiple capabilities | fulfillment worker | orders/picking/packing/shipping and related tests | valid/invalid transitions, quantity reconciliation, carrier unknown outcome | [ ] |
 | T2a | T1b | 67 baseline tests pass | delegated: domain/application/persistence | orders writer | orders capability, release domain behavior, migration0002, orders tests, packaging, study notes | atomic multi-line allocation, retry/cancel/owner/concurrency proofs | [x] |
-| T2b | T2a | order reservations pass | delegated: picking rules and persistence | picking writer | picking/reservation extensions and tests | partial pick bounds, ownership, cancellation cutoff | [ ] |
+| T2b | T2a | order reservations pass | delegated: picking rules and persistence | picking writer | picking/reservation extensions and tests | partial pick bounds, ownership, cancellation cutoff | [x] |
 | T2c | T2b | picking proofs pass | delegated: packages and reconciliation | packing writer | packages and related persistence/tests | exact packing totals, no cross-order contents | [ ] |
 | T2d | T2c | packages reconcile | delegated: shipping integration boundary | shipping writer | shipment attempts/fake carrier and tests | unknown outcome recovery, stock decremented once | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
@@ -32,10 +32,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
-- T2b: order-owned partial picking and cancellation cutoff. T2a allocation/cancellation proofs pass; no HTTP or downstream fulfillment implementation inferred.
+- T2c: order-owned packages and exact packing conservation. T2a/T2b proofs pass; no shipping/API completion inferred.
 
 ## Blocked
-- T2c waits on T2b; T2d waits on T2c; T3 waits on completed T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
+- T2d waits on T2c; T3 waits on completed T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
@@ -70,6 +70,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - T2a lab runtime upgraded to0002_orders; schema and tables registered in package metadata; wheel includes src/orders. No HTTP boundary yet (harness N/A). PostgreSQL integration is the observed runtime proof. Native review disabled/unmanaged.
 - T2a rollback: cancel/reconcile allocated orders before downgrading real lab0002; dropping reservations does not reverse stock quantities. In disposable test schemas downgrade/upgrade is safe. Revert orders capability, release behavior, migration registration, packaging and related docs/tests as one unit.
 - T2a delivery: feat/local-fulfillment-lab-orders targets feat/local-fulfillment-lab-postgres. Natural slice approximately1360 authored additions/deletions before tracker evidence; retained readable code/proofs/docs. No PR; future review slices or size exception still required before remote PR delivery.
+- T2a commit888149a,1378 authored additions/deletions including tracker. Running2232 including prior852 and2 evidence-bookkeeping lines. Local branch chain remains unpushed. Parent configured105passed; lab migration0002 head verified.
+- T2b RED18 domain failures and missing picking.application; configured full144passed (parent7.08s), default106passed38 explicit DBskips, diff check clean. Actual PostgreSQL blocked retry/start-cancel proofs, full reservation ownership, exact completion and injected rollback passed. Lab head0003_picking; downgrade locks tables and rejects existing picking progress.
+- T2b rollback: reconcile picking before downgrade to0002; revert picking capability, reservation/order/transaction changes, inventory.pick, schema migration, packaging/tests/study notes together. No API harness yet. Native review disabled/unmanaged.
+- T2c contract: immutable Package(orderkey,packageID,positive exact integer weight_grams,length_mm,width_mm,height_mm,nonempty contents). Contents use full reservation identity and positive quantities; canonicalize and reject duplicate reservation entries within a package. AddPackage takes order lock, requires PICKED for new ID, validates cumulative quantities <= picked/reserved; identical payload retry no-op including after PACKED, conflicting ID payload rejects. FinishPacking requires exact per-reservation and order-line totals, moves PICKED->PACKED and is idempotent when PACKED. Multiple packages may split one reservation. PackingConfig owns quantity conservation; Order owns state guard, avoiding circular domain imports. No inventory packed-counter mutation, replacements/removals/carrier selection or partial-order completion. Package writes atomic under order lock; schema FKs enforce ownership. No unresolved product decision.
 
 ## Next action
-T1 inventory milestone complete; T2 is next. Orders/picking/packing/shipping/messaging/API/cache/projection/telemetry and final interview assets remain unimplemented; do not infer full-lab completion.
+T1,T2a,T2b complete. Continue T2c packages and T2d shipping. Messaging/API/cache/projection/telemetry/final interview assets remain pending; do not infer full-lab completion.

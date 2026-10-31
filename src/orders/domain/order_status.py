@@ -4,4 +4,6 @@ from enum import StrEnum
 class OrderStatus(StrEnum):
     CREATED = "CREATED"
     ALLOCATED = "ALLOCATED"
+    PICKING = "PICKING"
+    PICKED = "PICKED"
     CANCELLED = "CANCELLED"

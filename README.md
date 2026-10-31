@@ -147,5 +147,17 @@ it does not undo allocations in inventory. Use it only in disposable schemas,
 or reconcile reservations/stock before any destructive operational downgrade.
 
 The earlier single-balance `AllocateInventory` remains a low-level,
-non-idempotent exercise, not the order allocation path. Next: partial picking
-and its cancellation cutoff; packages and shipping are not implemented yet.
+non-idempotent exercise, not the order allocation path. Order-owned partial picking now enforces its cancellation cutoff;
+packages and shipping are not implemented yet.
+
+## Order-owned partial picking
+
+Run migration `0003_picking` with `uv run alembic upgrade head`. Start picking,
+record cumulative picked targets per complete reservation identity, then complete
+only when every order line is fully picked. Picking changes neither on hand nor
+allocated stock. Cancellation is rejected once picking starts.
+
+`StartPicking`, `RecordPick` and `CompletePicking` live in
+`src/picking/application/` and share the order transaction factory above.
+See [the picking walkthrough](docs/study/picking.md) for retry semantics,
+concurrency proofs, scanner tradeoffs and the guarded downgrade.
