@@ -64,6 +64,14 @@ class InventoryBalance:
             raise InventoryError("allocated quantity cannot exceed available stock")
         return replace(self, allocated=self.allocated + quantity)
 
+    def release(self, quantity: int) -> "InventoryBalance":
+        """Release unpicked reservations without changing physical stock."""
+        if type(quantity) is not int or quantity <= 0:
+            raise InventoryError("released quantity must be a positive integer")
+        if quantity > self.allocated - self.picked:
+            raise InventoryError("cannot release picked or unallocated stock")
+        return replace(self, allocated=self.allocated - quantity)
+
     def pick(self, quantity: int) -> "InventoryBalance":
         """Record units physically picked for allocated work.
 

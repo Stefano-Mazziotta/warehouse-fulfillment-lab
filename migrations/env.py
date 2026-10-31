@@ -6,6 +6,7 @@ from alembic import context
 from sqlalchemy import create_engine
 
 from inventory.infrastructure.inventory_schema import metadata
+from orders.infrastructure import order_schema  # Register order tables for metadata.
 
 
 def migrate(connection):

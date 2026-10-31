@@ -22,16 +22,20 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T1a | — | baseline verified | delegated: domain/tests/docs | allocation worker | inventory domain + domain tests, allocation study note | invalid/insufficient/repeated allocation, unchanged original | [x] |
 | T1b | T1a | domain proofs pass | delegated: persistence/config | persistence worker | inventory application/infrastructure, migrations, Compose, pyproject, integration tests | real PostgreSQL concurrent last-unit + rollback/isolation/migrations | [x] |
 | T2 | T1b | concurrency proof passes | delegated: multiple capabilities | fulfillment worker | orders/picking/packing/shipping and related tests | valid/invalid transitions, quantity reconciliation, carrier unknown outcome | [ ] |
+| T2a | T1b | 67 baseline tests pass | delegated: domain/application/persistence | orders writer | orders capability, release domain behavior, migration0002, orders tests, packaging, study notes | atomic multi-line allocation, retry/cancel/owner/concurrency proofs | [x] |
+| T2b | T2a | order reservations pass | delegated: picking rules and persistence | picking writer | picking/reservation extensions and tests | partial pick bounds, ownership, cancellation cutoff | [ ] |
+| T2c | T2b | picking proofs pass | delegated: packages and reconciliation | packing writer | packages and related persistence/tests | exact packing totals, no cross-order contents | [ ] |
+| T2d | T2c | packages reconcile | delegated: shipping integration boundary | shipping writer | shipment attempts/fake carrier and tests | unknown outcome recovery, stock decremented once | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
 | T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask/GraphQL API and API tests | business endpoints, pagination/query limits/batching counts | [ ] |
 | T4b | T4a | API proof passes | delegated: adapters and diagnostics | infrastructure worker | cache/projection/telemetry + tests | Valkey outage, DynamoDB projection, local error capture, EDI fixtures | [ ] |
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
-- T2: order-linked reservations and multi-balance order transaction. T1a/T1b proofs pass.
+- T2b: order-owned partial picking and cancellation cutoff. T2a allocation/cancellation proofs pass; no HTTP or downstream fulfillment implementation inferred.
 
 ## Blocked
-- T3 waits on T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
+- T2c waits on T2b; T2d waits on T2c; T3 waits on completed T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
@@ -56,6 +60,16 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - T1b final staged count:682 authored additions/deletions plus373 generated lockfile lines; running852 authored lines including tracker/T1a. Unit-only invocation observed60 passed,7 explicitly skipped; configured full67 passed is the concurrency proof.
 - T1b work-unit commitbc24c3b; branch feat/local-fulfillment-lab-postgres. Local chain:80b8e59 tracker ->883de37 domain ->bc24c3b persistence. No push/PR/merge.
 - T2 preparation: do not loop single-balance allocation calls. New transaction must lock order, normalize repeated demand, lock balances in sorted full-key order and persist reservations/order/stock together. Location selection ascending location ID with split across locations within selected warehouse; cancellation cutoff is startPicking; shipment attempt covers all order packages.
+- T2a contract: OrderKey(owner,orderID), immutable warehouse and lines with unique line IDs/exact positive quantities. Create compares canonical line-ID order: identical payload retry is no-op, conflicting payload rejected. Allocate an already allocated order is no-op; cancelled orders reject allocation. Stock selection/locking sorted SKU/location; distribute duplicate-SKU demand to ascending line IDs. No SKIP LOCKED.
+- T2a cancellation retains reservation rows as history; cancelled order status makes them inactive. Lock order first and stock in the same order, release only its own quantities once. Add domain release bounded by allocated minus picked; existing unattached AllocateInventory remains explicitly a low-level non-idempotent exercise.
+- T2a reservations enforce composite line/stock owner,warehouse,SKU foreign-key relationships. PostgreSQL tests use uniquely named disposable schemas; no shared global truncation. TDD ON uv run pytest; RDD OFF. No unresolved product decision blocks this slice.
+- T2b contract for later slice: StartPicking locks order and changes ALLOCATED to PICKING; cancellation rejected from PICKING onward. RecordPick uses a cumulative picked target per complete reservation identity (order,line,source), not an unkeyed scan delta: same target is no-op, decreases reject, target must be exact positive int within reserved quantity. Apply only delta to inventory picked. CompletePicking requires every reservation fully picked; repeated completion is no-op. This lab API trades scanner-delta convenience for retry safety without operation-ID storage; document that tradeoff. Physical location is retained accounting source, not a staging-bin model.
+- T2a RED: missing order modules, then domain/application GREEN; transition refinement observed3 AttributeErrors before Order.allocate/cancel implemented. Final configured full105 passed (parent4.11s); default82 passed23 DBskips; diff check clean. Existing67 tests preserved.
+- T2a proofs: duplicateSKU/multilocation attribution, canonical create retry/conflict, concurrent create, actual blocked same/differentorder recheck, insufficient later line/no writes, fault after reservation insert rollback, cancellation fault rollback/isolation, all four stockidentity dimensions, FK guards and migration roundtrip. Domain owns transitions; application owns transaction orchestration.
+- T2a bug discovery: psycopg INSERT rowcount can be-1 and truthy; INSERT ON CONFLICT DO NOTHING RETURNING scalar now distinguishes insert/conflict, with concurrent retry proofs.
+- T2a lab runtime upgraded to0002_orders; schema and tables registered in package metadata; wheel includes src/orders. No HTTP boundary yet (harness N/A). PostgreSQL integration is the observed runtime proof. Native review disabled/unmanaged.
+- T2a rollback: cancel/reconcile allocated orders before downgrading real lab0002; dropping reservations does not reverse stock quantities. In disposable test schemas downgrade/upgrade is safe. Revert orders capability, release behavior, migration registration, packaging and related docs/tests as one unit.
+- T2a delivery: feat/local-fulfillment-lab-orders targets feat/local-fulfillment-lab-postgres. Natural slice approximately1360 authored additions/deletions before tracker evidence; retained readable code/proofs/docs. No PR; future review slices or size exception still required before remote PR delivery.
 
 ## Next action
 T1 inventory milestone complete; T2 is next. Orders/picking/packing/shipping/messaging/API/cache/projection/telemetry and final interview assets remain unimplemented; do not infer full-lab completion.
