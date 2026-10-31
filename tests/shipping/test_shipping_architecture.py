@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 SRC = Path(__file__).resolve().parents[2] / "src"
-INNER = {"shipping", "packing", "orders", "inventory"}
+INNER = {"shipping", "packing", "orders", "inventory", "messaging"}
 
 
 def imports(source):

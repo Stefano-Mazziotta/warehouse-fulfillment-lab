@@ -47,6 +47,23 @@ def test_repeating_ship_finalizes_once_and_leaves_the_carrier_alone():
     assert transaction.stock_saves == 2 and transaction.order_saves == 1
 
 
+def test_shipped_event_is_recorded_once_with_the_tracking_number():
+    transaction, _, ship, reconcile = setup()
+    ship.execute(KEY)
+    ship.execute(KEY)
+    reconcile.execute(KEY)
+    (event,) = transaction.events
+    assert (event.event_type, event.payload["tracking_number"]) == ("OrderShipped", "TRACK-1")
+
+
+def test_unknown_carrier_outcome_records_no_shipped_event():
+    transaction, carrier, ship, _ = setup()
+    carrier.lose_next_create_response = True
+    carrier.lookup_unavailable = True
+    assert ship.execute(KEY).status == ShipmentStatus.UNKNOWN
+    assert transaction.events == []
+
+
 def test_carrier_is_never_called_inside_a_wms_transaction():
     transaction, carrier, ship, _ = setup()
     seen = []

@@ -14,6 +14,7 @@ class MemoryTransaction:
             OrderLine('b', 'sku', 2), OrderLine('a', 'sku', 1)))
         self.stock = InventoryBalance(InventoryKey('o', 'sku', 'w', 'l'), quantity)
         self.reservations = []
+        self.events = []
 
     def get_order(self, key, *, lock=False):
         return self.order
@@ -32,6 +33,9 @@ class MemoryTransaction:
 
     def save_order(self, order):
         self.order = order
+
+    def record_event(self, event):
+        self.events.append(event)
 
     @contextmanager
     def __call__(self):
@@ -53,6 +57,7 @@ def test_duplicate_sku_demand_distributed_by_line_and_retry_noop():
     assert len(tx.reservations) == 2
     with pytest.raises(OrderError):
         allocate.execute(tx.order.key)
+    assert [e.event_type for e in tx.events] == ['OrderAllocated', 'OrderCancelled']
 
 
 def test_shortage_checks_aggregate_before_any_write():

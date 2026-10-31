@@ -5,6 +5,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 
 from inventory.domain import InventoryKey
+from messaging.domain.fulfillment_events import order_cancelled
 from orders.domain import Order, OrderError, OrderKey, OrderStatus
 
 from .order_not_found import OrderNotFound
@@ -38,4 +39,5 @@ class CancelOrder:
                 if released:
                     raise OrderError("Reservation stock is missing")
             transaction.save_order(cancelled)
+            transaction.record_event(order_cancelled(key.client_id, key.order_id))
             return cancelled

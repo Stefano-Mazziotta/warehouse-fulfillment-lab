@@ -4,6 +4,7 @@ It keeps the guarantees application code relies on: writes need the order lock,
 stock writes need the stock lock, and a failed transaction leaves no trace.
 """
 from contextlib import contextmanager
+from copy import copy
 from dataclasses import replace
 
 from inventory.domain import InventoryBalance, InventoryKey
@@ -24,6 +25,10 @@ RESERVATIONS = (
 )
 
 
+def event_order_key(event):
+    return OrderKey(event.client_id, event.aggregate_id)
+
+
 def content(line_id, stock_key, quantity):
     return PackageItem(KEY, line_id, stock_key, quantity)
 
@@ -40,7 +45,7 @@ def full_packages():
 
 
 class InMemoryPackingTransaction:
-    _state_names = ("orders", "reservations", "packages", "stock")
+    _state_names = ("orders", "reservations", "packages", "stock", "events")
 
     def __init__(self, status=OrderStatus.PICKED, packages=()):
         self.orders = {KEY: Order(
@@ -51,6 +56,7 @@ class InMemoryPackingTransaction:
             BIN_A: InventoryBalance(BIN_A, on_hand=2, allocated=2, picked=2),
             BIN_B: InventoryBalance(BIN_B, on_hand=3, allocated=3, picked=3),
         }
+        self.events = []
         self.order_saves = 0
         self.stock_saves = 0
         self.active = False
@@ -61,7 +67,7 @@ class InMemoryPackingTransaction:
     def __call__(self):
         if self.active:
             raise RuntimeError("Transaction already active")
-        snapshot = {name: dict(getattr(self, name)) for name in self._state_names}
+        snapshot = {name: copy(getattr(self, name)) for name in self._state_names}
         self.active = True
         try:
             yield self
@@ -121,6 +127,10 @@ class InMemoryPackingTransaction:
             raise RuntimeError("Stock must be locked before saving")
         self.stock[balance.key] = balance
         self.stock_saves += 1
+
+    def record_event(self, event):
+        self._require_order_lock(event_order_key(event))
+        self.events.append(event)
 
     def get_packages(self, key):
         return self.packages.get(key, ())

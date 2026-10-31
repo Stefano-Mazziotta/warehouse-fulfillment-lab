@@ -1,6 +1,7 @@
 """Fresh READ COMMITTED transaction: order lock, then sorted stock locks."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 from types import TracebackType
 from typing import Any
 
@@ -14,6 +15,8 @@ from inventory.infrastructure.inventory_schema import (
     inventory_balances,
     snapshot,
 )
+from messaging.domain.integration_event import IntegrationEvent
+from messaging.infrastructure.outbox_recording import record_outbox_event
 from orders.domain import Order, OrderError, OrderKey, OrderLine, OrderStatus, Reservation
 
 from packing.domain.package import Package
@@ -44,8 +47,13 @@ def _package_from_row(key: OrderKey, row: Mapping[str, Any],
 
 class PostgresOrderTransaction:
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    ) -> None:
         self._engine = engine
+        self._clock = clock
         self.connection: Connection | None = None
         self._locked_orders: set[OrderKey] = set()
         self._locked_stock: set[InventoryKey] = set()
@@ -257,6 +265,9 @@ class PostgresOrderTransaction:
             .values(status=order.status.value)
         )
         self._connection().execute(statement)
+
+    def record_event(self, event: IntegrationEvent) -> None:
+        record_outbox_event(self._connection(), event, self._clock())
 
     def get_packages(self, key: OrderKey) -> tuple[Package, ...]:
         headers = self._connection().execute(

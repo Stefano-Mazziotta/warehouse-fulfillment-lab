@@ -17,7 +17,7 @@ def test_picking_has_no_framework_or_infrastructure_imports():
                 continue
             for module in modules:
                 parts = module.split(".")
-                if parts[0] in {"inventory", "orders"}:
+                if parts[0] in {"inventory", "orders", "messaging"}:
                     assert len(parts) > 1 and parts[1] in {"domain", "application"}
                 else:
                     assert parts[0] in sys.stdlib_module_names

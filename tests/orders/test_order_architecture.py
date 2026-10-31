@@ -26,6 +26,8 @@ def test_order_inner_layers_only_depend_on_inward_layers(layer):
                 parts = name.split('.')
                 if parts[0] == 'orders':
                     assert len(parts) > 1 and parts[1] in allowed, (source, name)
+                elif parts[0] == 'messaging':
+                    assert len(parts) > 1 and parts[1] in {'domain', 'application'}, (source, name)
                 elif parts[0] == 'inventory':
                     assert len(parts) > 1 and parts[1] == 'domain', (source, name)
                 else:

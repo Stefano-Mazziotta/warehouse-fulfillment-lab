@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 
+from messaging.domain.fulfillment_events import order_allocated
 from orders.domain import Order, OrderError, OrderKey, Reservation
 
 from .order_not_found import OrderNotFound
@@ -53,4 +54,7 @@ class AllocateOrder:
                     if not remaining:
                         break
             transaction.save_order(allocated)
+            transaction.record_event(order_allocated(
+                key.client_id, key.order_id, order.warehouse_id,
+                ((line.line_id, line.sku, line.quantity) for line in order.lines)))
             return allocated
