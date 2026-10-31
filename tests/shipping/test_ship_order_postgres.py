@@ -273,10 +273,11 @@ def test_finalization_fault_rolls_back_stock_order_and_attempt_then_retry_succee
     assert balances(engine) == SHIPPED_BALANCES and len(carrier_shipments(engine)) == 1
 
 
-def test_migration_roundtrip_keeps_attempts_and_refuses_information_loss(orders_database):
+def test_migration_roundtrip_keeps_attempts_and_refuses_information_loss(orders_database, drain_messaging):
     engine = orders_database
     prepare_packed(engine)
     config = Config("alembic.ini")
+    drain_messaging(engine)
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "0004_packing")
@@ -284,6 +285,7 @@ def test_migration_roundtrip_keeps_attempts_and_refuses_information_loss(orders_
     carrier = new_carrier(engine)
     carrier.lose_next_create_response = True
     ship(engine, carrier)
+    drain_messaging(engine)
     with pytest.raises(RuntimeError, match="discard shipping"):
         with engine.begin() as connection:
             config.attributes["connection"] = connection

@@ -1,0 +1,9 @@
+from enum import Enum
+
+
+class IngestOutcome(Enum):
+    CREATED = "CREATED"
+    ALREADY_KNOWN = "ALREADY_KNOWN"
+    STALE_IGNORED = "STALE_IGNORED"
+    CONFLICT = "CONFLICT"
+    DUPLICATE_EVENT = "DUPLICATE_EVENT"

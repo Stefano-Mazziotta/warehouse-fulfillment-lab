@@ -216,3 +216,14 @@ write their event in the same PostgreSQL transaction as the state change. An
 effects together, so redelivery is harmless. Delivery is at-least-once and ordering is
 not guaranteed. There is no broker adapter yet; `InMemoryPublisher` is the only
 publisher. See [the messaging walkthrough](docs/study/messaging.md).
+
+## Repairing lost events with reconciliation
+
+Migration `0007_integrations` adds `integration_events` (raw events, persisted before
+processing), `integration_checkpoints` (per source and owner) and
+`channel_order_versions` (the accepted channel version per order). A fake sales channel
+is the source of truth; `ReceiveChannelEvent` feeds webhook-style events and
+`ReconcileChannelOrders` feeds polled pages through the same idempotent ingest path. The
+checkpoint advances only after a page is durably processed, the first page re-reads an
+overlap window, and a row lock serializes concurrent reconcilers. No HTTP or broker is
+wired yet. See [the reconciliation walkthrough](docs/study/reconciliation.md).

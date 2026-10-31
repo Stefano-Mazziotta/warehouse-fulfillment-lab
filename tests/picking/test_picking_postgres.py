@@ -181,7 +181,7 @@ def test_start_and_cancel_serialize_at_cutoff(orders_database, winner):
     assert PostgresInventoryRepository(engine).get(STOCK).allocated == (5 if winner == "start" else 0)
 
 
-def test_db_bounds_and_migration_refuses_information_loss(orders_database):
+def test_db_bounds_and_migration_refuses_information_loss(orders_database, drain_messaging):
     engine = orders_database
     prepared(engine)
     for target in (-1, 4):
@@ -189,6 +189,7 @@ def test_db_bounds_and_migration_refuses_information_loss(orders_database):
             connection.execute(update(reservations).where(reservations.c.line_id == "a")
                                .values(picked_quantity=target))
     config = Config("alembic.ini")
+    drain_messaging(engine)
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "0002_orders")
@@ -198,6 +199,7 @@ def test_db_bounds_and_migration_refuses_information_loss(orders_database):
     for target in (0, 1):
         if target:
             RecordPick(factory(engine)).execute(KEY, "a", STOCK, target)
+        drain_messaging(engine)
         with pytest.raises(RuntimeError, match="discard picking"):
             with engine.begin() as connection:
                 config.attributes["connection"] = connection
@@ -211,10 +213,12 @@ def test_missing_picking_order_is_typed_absence(orders_database, operation):
         operation(factory(orders_database)).execute(KEY)
 
 
-def test_migration_preserves_existing_zero_progress_and_guards_progress_independently(orders_database):
+def test_migration_preserves_existing_zero_progress_and_guards_progress_independently(
+        orders_database, drain_messaging):
     engine = orders_database
     prepared(engine)
     config = Config("alembic.ini")
+    drain_messaging(engine)
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "0002_orders")
@@ -224,6 +228,7 @@ def test_migration_preserves_existing_zero_progress_and_guards_progress_independ
     with engine.begin() as connection:
         connection.execute(update(reservations).where(reservations.c.line_id == "a")
                            .values(picked_quantity=1))
+    drain_messaging(engine)
     with pytest.raises(RuntimeError, match="discard picking"):
         with engine.begin() as connection:
             config.attributes["connection"] = connection
@@ -231,13 +236,14 @@ def test_migration_preserves_existing_zero_progress_and_guards_progress_independ
     assert records(engine)[0].picked_quantity == 1
 
 
-def test_completed_order_also_blocks_migration_downgrade(orders_database):
+def test_completed_order_also_blocks_migration_downgrade(orders_database, drain_messaging):
     engine = orders_database
     prepared(engine)
     StartPicking(factory(engine)).execute(KEY)
     RecordPick(factory(engine)).execute(KEY, "a", STOCK, 3)
     RecordPick(factory(engine)).execute(KEY, "b", STOCK, 2)
     CompletePicking(factory(engine)).execute(KEY)
+    drain_messaging(engine)
     config = Config("alembic.ini")
     with pytest.raises(RuntimeError, match="discard picking"):
         with engine.begin() as connection:

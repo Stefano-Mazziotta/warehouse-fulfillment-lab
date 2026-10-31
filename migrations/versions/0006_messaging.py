@@ -34,8 +34,14 @@ def upgrade():
 
 
 def downgrade():
-    # No data guard, unlike earlier revisions: the outbox is a delivery buffer, not
-    # business state. Orders, stock and shipments stay authoritative and a later
-    # reconciliation can re-derive missed events. Undelivered events ARE discarded.
+    connection = op.get_bind()
+    connection.execute(sa.text("LOCK TABLE outbox_messages, inbox_messages IN ACCESS EXCLUSIVE MODE"))
+    # PUBLISHED rows are delivered history. PENDING rows were never sent and DEAD rows were
+    # given up on; the inbox is what makes redelivery safe. Dropping any of them loses
+    # messaging state that cannot be re-derived from the aggregates.
+    if connection.scalar(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM outbox_messages WHERE status IN ('PENDING', 'DEAD')) "
+        "OR EXISTS (SELECT 1 FROM inbox_messages)")):
+        raise RuntimeError("Downgrade would discard messaging information; drain or reconcile first")
     op.drop_table("inbox_messages")
     op.drop_table("outbox_messages")
