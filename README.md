@@ -104,6 +104,23 @@ allocate = AllocateInventory(lambda: PostgresInventoryTransaction(engine))
 engine.dispose()
 ```
 
+## Run the RabbitMQ transport
+
+Compose also defines `rabbitmq` (`rabbitmq:3-management-alpine`, pulled from Docker Hub
+on first use) on loopback AMQP port 55672 and management UI port 55673, with the
+`rabbitmq-data` volume. Credentials are local lab values only.
+
+```sh
+docker compose -p warehouse-fulfillment-lab up -d --wait postgres rabbitmq
+export LAB_TEST_DATABASE_URL=postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab
+export LAB_TEST_AMQP_URL=amqp://lab:lab@127.0.0.1:55672/
+uv run pytest
+```
+
+Without `LAB_TEST_AMQP_URL` the broker tests explicitly skip. They use uniquely named
+exchanges and queues and delete them afterwards. See
+[the messaging study note](docs/study/messaging.md#rabbitmq-transport).
+
 Stop only the lab with `docker compose -p warehouse-fulfillment-lab down`.
 This preserves its data volume. `uv run alembic downgrade base` removes the lab
 inventory table and all its balances: use only against this disposable database.
