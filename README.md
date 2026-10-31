@@ -4,6 +4,20 @@ A domain-first Python learning lab. The first inventory slice uses a `src/`
 layout. Domain and application stay independent of Flask, databases, and queues;
 PostgreSQL infrastructure supplies atomic single-balance allocation.
 
+## Current capabilities
+
+The lab now covers the whole fulfillment path for one owner-scoped order:
+
+- Inventory, order-owned allocation and cancellation, partial picking, packing and shipping
+  with an unreliable fake carrier, all on PostgreSQL.
+- Reliable events (outbox and inbox), RabbitMQ transport, and reconciliation of a fake sales channel.
+- A Flask host exposing `POST /graphql`, `GET /health` and `POST /webhooks/sales-channel`, plus a
+  guided API demo, failure drills, and JSON logs shipped to Grafana through Loki and Alloy.
+
+The sections below follow the learning progression, from one in-memory read to the full API.
+Setup for the optional services is in
+[Fresh machine: obtain the Docker images](#fresh-machine-obtain-the-docker-images).
+
 ## Run locally
 
 With Python 3.11+ and [uv](https://docs.astral.sh/uv/) installed:
@@ -60,16 +74,36 @@ A missing identity raises the application-level `InventoryNotFound` error.
 Client means inventory owner, not buyer. Client, SKU, warehouse, and location
 jointly identify a balance in this provisional lab model.
 
-## Add Flask later, outside the core
+## Keep HTTP outside the core
 
-A future Flask adapter can translate HTTP parameters into `InventoryKey`, call
-the injected `get_inventory.execute(key)`, serialize the result, and translate
-`InventoryNotFound` to HTTP 404. Wire the repository and use case at startup
-as above, not inside the domain. The GraphQL API section below does exactly this.
+An HTTP adapter translates request parameters into `InventoryKey`, calls the injected
+`get_inventory.execute(key)`, serializes the result, and translates `InventoryNotFound`
+to HTTP 404. The repository and use case are wired at startup, never inside the domain.
+The Flask host described in the GraphQL API section below does exactly this.
+
+## Fresh machine: obtain the Docker images
+
+`compose.yaml` sets `pull_policy: never` on `postgres`, `valkey` and `dynamodb-local`, so
+`docker compose up` fails on a machine that has not downloaded them. Pull every image once
+before starting the demo (this needs network access):
+
+```sh
+docker pull postgres:16-alpine
+docker pull valkey/valkey:8.1-alpine
+docker pull amazon/dynamodb-local:2.5.4
+docker compose -p warehouse-fulfillment-lab pull rabbitmq loki alloy grafana
+```
+
+The last command fetches `rabbitmq:3-management-alpine`, `grafana/loki:3.5.5`,
+`grafana/alloy:v1.11.0` and `grafana/grafana:12.2.0`; those services do not set
+`pull_policy: never`, so Compose would also pull them on first `up`. Check with
+`docker image ls`. The [end-to-end demo](docs/demo.md) starts `postgres`, `rabbitmq`, `valkey`,
+`dynamodb-local`, `loki` and `alloy`, so pulling the images above covers it.
 
 ## Run transactional allocation with PostgreSQL
 
-The cached `postgres:16-alpine` image is required; Compose never pulls it.
+The `postgres:16-alpine` image must already be present; Compose never pulls it (see
+[Fresh machine](#fresh-machine-obtain-the-docker-images)).
 The lab owns only Compose project `warehouse-fulfillment-lab`, loopback port
 55432, and its named data volume. Credentials below are local lab values only.
 
@@ -89,7 +123,7 @@ PostgreSQL database; point them only at a disposable local lab database.
 applies the domain rule, and commits its new balance. Use a fresh
 `PostgresInventoryTransaction` per call; `PostgresInventoryRepository` remains
 read-only. See [the transaction walkthrough](docs/study/transactional-allocation.md).
-There is no HTTP server yet.
+The Flask HTTP host is described under [GraphQL API](#graphql-api-flask-host).
 
 ```python
 from sqlalchemy import create_engine
@@ -279,3 +313,18 @@ uv run python -m orders.infrastructure.order_projection_cli run 2>> logs/backend
 - Truncate with `: > logs/backend.log` only while Alloy is stopped; rotation is not handled.
 
 See [the observability note](docs/study/observability.md).
+
+## Learning assets
+
+Start with the demo, break things with the drills, then use the last two to prepare for an
+interview. All are prediction-first: answer before you read the explanation.
+
+- [End-to-end demo](docs/demo.md): one scripted order from `CREATED` to `SHIPPED` through the API.
+- [Failure drills](docs/failure-drills.md): eight runnable failures (race, timeout, duplicates, crashes, outages).
+- [AWS map](docs/aws-map.md): each lab component mapped to AWS with trade-offs and sources. Reading only; nothing is deployed.
+- [Mock interview checklist](docs/interview-checklist.md): the success criteria as questions, evidence and a self-rating.
+- Study notes: [inventory](docs/study/inventory-allocation.md), [transactions](docs/study/transactional-allocation.md),
+  [orders](docs/study/order-allocation.md), [picking](docs/study/picking.md), [packing](docs/study/packing.md),
+  [shipping](docs/study/shipping.md), [messaging](docs/study/messaging.md), [reconciliation](docs/study/reconciliation.md),
+  [GraphQL API](docs/study/graphql-api.md), [read cache](docs/study/read-cache.md),
+  [order projection](docs/study/order-projection.md), [observability](docs/study/observability.md), [EDI](docs/study/edi.md).
