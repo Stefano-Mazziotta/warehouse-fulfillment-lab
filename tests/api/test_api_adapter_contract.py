@@ -162,3 +162,25 @@ def test_oversized_body_is_a_json_413():
 def test_a_generated_request_id_is_returned_when_the_caller_sends_none(adapter_lab):
     response = adapter_lab.client.get("/nope")
     assert response.get_json()["error"]["requestId"] == response.headers["X-Request-ID"]
+
+
+def _type_dag(levels: int) -> str:
+    """Tiny document whose fragment expansion doubles at every level (introspection shape)."""
+    fragments = ["fragment F0 on __Type { name }"] + [
+        f"fragment F{n} on __Type {{ ofType {{ ...F{n - 1} ...F{n - 1} }} }}" for n in range(1, levels + 1)]
+    return f"{{ __schema {{ types {{ ...F{levels} }} }} }} " + " ".join(fragments)
+
+
+def test_a_fragment_dag_is_rejected_over_http_before_the_expensive_validation_runs(adapter_lab):
+    started = time.perf_counter()
+    body = adapter_lab.gql(_type_dag(22))
+    elapsed = time.perf_counter() - started
+    assert body["errors"][0]["extensions"]["code"] == "QUERY_TOO_DEEP"
+    assert elapsed < 0.5, f"limit error took {elapsed:.2f}s: default validation ran on the whole document"
+
+
+def test_a_document_inside_the_limits_still_gets_normal_schema_validation(adapter_lab):
+    body = adapter_lab.gql("{ orders { nodes { notAField } } }")
+    assert "notAField" in body["errors"][0]["message"]
+    assert "code" not in body["errors"][0].get("extensions", {}) or body["errors"][0]["extensions"]["code"] not in (
+        "QUERY_TOO_DEEP", "QUERY_TOO_COMPLEX")

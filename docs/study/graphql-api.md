@@ -78,7 +78,11 @@ the order id, which is stable but not chronological.
 
 ## Depth and complexity limits
 
-Both are graphql-core validation rules, so a rejected query runs no resolver.
+Both are graphql-core validation rules, so a rejected query runs no resolver. They run as a
+preflight (`QueryLimits.on_validate`) before the default validation pass: graphql-core's
+overlapping-fields rule is exponential on a tiny fragment DAG, and appending our rules to the
+default set would not stop it from walking the whole document. A document that breaks a limit
+is rejected in milliseconds; one inside the limits gets the normal schema validation.
 
 - Depth: at most 7 levels, introspection included (`__schema { types { fields { type
   { ofType ... } } } }` is a classic abuse). Code `QUERY_TOO_DEEP`.
