@@ -7,7 +7,6 @@ from orders.domain import Order, OrderKey
 
 
 class CompletePicking:
-    """Complete only when owned reservations exactly cover all picked lines."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

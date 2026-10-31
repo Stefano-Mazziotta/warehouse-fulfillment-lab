@@ -12,7 +12,6 @@ from .order_transaction import OrderTransaction
 
 
 class CancelOrder:
-    """Release only this order's reservations and cancel atomically."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

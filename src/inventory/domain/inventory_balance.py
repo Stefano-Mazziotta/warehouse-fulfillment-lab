@@ -1,9 +1,3 @@
-"""Stock quantities and the rules that keep a balance valid.
-
-Receiving and allocation enforce snapshot-level stock rules. Picking, packing,
-and shipping remain learning exercises. Persistence must protect concurrent updates.
-"""
-
 from dataclasses import dataclass, replace
 
 from .inventory_error import InventoryError
@@ -32,11 +26,9 @@ class InventoryBalance:
 
     @property
     def available(self) -> int:
-        """Units this balance can promise to a new order."""
         return self.on_hand - self.allocated
 
     def validate_invariants(self) -> None:
-        """Reject invalid snapshots rather than silently repairing them."""
         for name in ("on_hand", "allocated", "picked", "packed"):
             quantity = getattr(self, name)
             if type(quantity) is not int or quantity < 0:
@@ -47,17 +39,11 @@ class InventoryBalance:
             raise InventoryError("picked cannot exceed allocated")
 
     def receive(self, quantity: int) -> "InventoryBalance":
-        """Return a new snapshot with received stock; reservations stay intact."""
         if type(quantity) is not int or quantity <= 0:
             raise InventoryError("received quantity must be a positive integer")
         return replace(self, on_hand=self.on_hand + quantity)
 
     def allocate(self, quantity: int) -> "InventoryBalance":
-        """Return a new reservation snapshot within available stock.
-
-        Persistence must make the availability check and saved update atomic
-        across concurrent callers; this immutable snapshot alone cannot do so.
-        """
         if type(quantity) is not int or quantity <= 0:
             raise InventoryError("allocated quantity must be a positive integer")
         if quantity > self.available:
@@ -65,7 +51,6 @@ class InventoryBalance:
         return replace(self, allocated=self.allocated + quantity)
 
     def release(self, quantity: int) -> "InventoryBalance":
-        """Release unpicked reservations without changing physical stock."""
         if type(quantity) is not int or quantity <= 0:
             raise InventoryError("released quantity must be a positive integer")
         if quantity > self.allocated - self.picked:
@@ -73,7 +58,6 @@ class InventoryBalance:
         return replace(self, allocated=self.allocated - quantity)
 
     def pick(self, quantity: int) -> "InventoryBalance":
-        """Record a positive delta within allocated stock, without moving stock."""
         if type(quantity) is not int or quantity <= 0:
             raise InventoryError("picked quantity must be a positive integer")
         if quantity > self.allocated - self.picked:
@@ -81,16 +65,9 @@ class InventoryBalance:
         return replace(self, picked=self.picked + quantity)
 
     def pack(self, quantity: int) -> "InventoryBalance":
-        """Record picked units placed into package(s)."""
         # TODO: decide whether packed belongs in this balance or in an order /
         # package model, then enforce the relevant quantity relationship.
         raise NotImplementedError
 
     def ship(self, quantity: int) -> "InventoryBalance":
-        """Record units leaving the warehouse on a shipment.
-
-        Hint: on_hand and allocated decrease by the same shipped quantity, so
-        available is unchanged. Decide how picked/packed quantities are cleared.
-        Shipped is usually a movement/history fact, not current on-hand stock.
-        """
         raise NotImplementedError

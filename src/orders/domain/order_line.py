@@ -5,7 +5,6 @@ from .order_error import OrderError
 
 @dataclass(frozen=True)
 class OrderLine:
-    """An immutable SKU demand with identity local to its order."""
 
     line_id: str
     sku: str

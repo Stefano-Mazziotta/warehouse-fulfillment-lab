@@ -11,7 +11,6 @@ from .order_transaction import OrderTransaction
 
 
 class AllocateOrder:
-    """Reserve every order line and change state in one transaction."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

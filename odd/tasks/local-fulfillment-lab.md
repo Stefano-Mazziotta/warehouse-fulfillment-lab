@@ -12,7 +12,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - Exclude frontend, auth system, real carrier connections, EDI compliance, optimization, microservices and Kubernetes.
 - TDD ON: prior explicit user choice; exact runner `uv run pytest`. Require observed RED/GREEN then refactor; integration proofs use real local services.
 - RDD OFF, global setting verified. Ordinary tests remain mandatory; report disabled/unmanaged, never run native review while disabled.
-- Delivery ask-on-risk, approved feature-branch-chain. Forecast 3,000–5,000 authored additions/deletions across full lab; size is advisory per task. Keep cohesive tests/docs with work-unit commits; no code compression or artificial splitting.
+- Delivery ask-on-risk, approved feature-branch-chain. Revised forecast 10,000–15,000 authored additions/deletions across full lab including tests/study notes, based on observed ownership/concurrency proof size; size is advisory per task. Keep cohesive tests/docs with work-unit commits; no code compression or artificial splitting.
 - Tracker branch feat/local-fulfillment-lab; baseline 66e63196281317602bbcd76cf5a1f8979fd60335. First child targets tracker; subsequent children target immediate predecessor. No remote tracker PR.
 - Preserve untracked .codegraph/ and docs/Untitled-2026-10-18-1954.excalidraw. Do not touch other projects' containers.
 
@@ -24,21 +24,22 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 | T2 | T1b | concurrency proof passes | delegated: multiple capabilities | fulfillment worker | orders/picking/packing/shipping and related tests | valid/invalid transitions, quantity reconciliation, carrier unknown outcome | [ ] |
 | T2a | T1b | 67 baseline tests pass | delegated: domain/application/persistence | orders writer | orders capability, release domain behavior, migration0002, orders tests, packaging, study notes | atomic multi-line allocation, retry/cancel/owner/concurrency proofs | [x] |
 | T2b | T2a | order reservations pass | delegated: picking rules and persistence | picking writer | picking/reservation extensions and tests | partial pick bounds, ownership, cancellation cutoff | [x] |
-| T2c | T2b | picking proofs pass | delegated: packages and reconciliation | packing writer | packages and related persistence/tests | exact packing totals, no cross-order contents | [ ] |
+| T2c | T2b | picking proofs pass | delegated: packages and reconciliation | packing writer | packages and related persistence/tests | exact packing totals, no cross-order contents | [x] |
 | T2d | T2c | packages reconcile | delegated: shipping integration boundary | shipping writer | shipment attempts/fake carrier and tests | unknown outcome recovery, stock decremented once | [ ] |
 | T3 | T2 | fulfillment demo passes | delegated: integration boundaries | messaging worker | integrations/messaging/worker, related tests | outbox, duplicate/redelivery, bounded retries/DLQ/reconciliation | [ ] |
-| T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask/GraphQL API and API tests | business endpoints, pagination/query limits/batching counts | [ ] |
+| T4a | T3 | reliable flow passes | delegated: HTTP/contracts | API worker | Flask-hosted GraphQL API and API tests | business mutations, pagination/query limits/batching counts; REST only for inbound webhooks/health | [ ] |
 | T4b | T4a | API proof passes | delegated: adapters and diagnostics | infrastructure worker | cache/projection/telemetry + tests | Valkey outage, DynamoDB projection, local error capture, EDI fixtures | [ ] |
 | T5 | T4b | feature freeze | delegated: learning assets | study worker | demos/study guides/failure scripts | full demo,8 failure drills,AWS map,mock interview checklist | [ ] |
 
 ## Ready now
-- T2c: order-owned packages and exact packing conservation. T2a/T2b proofs pass; no shipping/API completion inferred.
+- T2d: shipping attempts, fake carrier and uncertain-outcome reconciliation. T2c proofs pass; no API completion inferred.
 
 ## Blocked
-- T2d waits on T2c; T3 waits on completed T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
+- T3 waits on completed T2; T4a waits on T3; T4b waits on T4a; T5 waits on T4b.
 
 ## Shared contracts
 - Coordinator owns task tracker and cross-slice interface decisions. Child workers get exclusive file lists; Compose and package config handed to one worker at a time.
+- API decision (user): GraphQL first; REST only when a feature needs it (inbound webhooks, health). Flask is the host and composition root (`create_app`), a thin adapter: resolvers/routes parse input, call one use case, map errors (OrderNotFound->not found, OrderError->conflict) in one place. Per-capability adapters/api folders, DTOs at the edge, no domain objects serialized directly, no flask/strawberry imports in domain/application (extend architecture tests). Mutations accept idempotent inputs.
 - API/worker share application use cases; domain/application never import Flask, SQLAlchemy, messaging or cache libraries.
 - PostgreSQL is authoritative; cache/projections cannot authorize allocations. Broker delivery is not exactly-once business execution.
 
@@ -47,6 +48,7 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - Host5432 belongs to another project; lab uses loopback55432 after availability check. Never reuse unrelated database/container.
 - HTTP harness initially N/A (no HTTP adapter); T1 runtime proof is PostgreSQL integration.
 - Per-task closure records observed tests, commit, authored line count, rollback and native review disabled/unmanaged.
+- User follow-up: use atomic commits. Each new commit delivers one coherent behavior with its focused tests/docs; do not mix independent behaviors or rewrite existing commits without authorization. T2c delivery decomposes package domain rules, AddPackage persistence, and FinishPacking into independently passing dependent commits, not file-type batches. Coordinator owns staging; worker prepares disjoint proof files and identifies shared hunks.
 - Initial Engram mirror synchronized and read back, observation1739.
 - T1a RED:13 allocation tests failed with NotImplementedError; GREEN:52 passed. Parent independently reran52 passed; diff check clean. Validates exact positive integer, insufficient stock, original preservation and repeated reservations.
 - T1a rollback: revert allocation method, its13 tests and docs/study/inventory-allocation.md. HTTP harness N/A: pure domain slice. Native review disabled/unmanaged.
@@ -73,7 +75,10 @@ Implement the approved local order-to-shipment interview lab. Agent builds teste
 - T2a commit888149a,1378 authored additions/deletions including tracker. Running2232 including prior852 and2 evidence-bookkeeping lines. Local branch chain remains unpushed. Parent configured105passed; lab migration0002 head verified.
 - T2b RED18 domain failures and missing picking.application; configured full144passed (parent7.08s), default106passed38 explicit DBskips, diff check clean. Actual PostgreSQL blocked retry/start-cancel proofs, full reservation ownership, exact completion and injected rollback passed. Lab head0003_picking; downgrade locks tables and rejects existing picking progress.
 - T2b rollback: reconcile picking before downgrade to0002; revert picking capability, reservation/order/transaction changes, inventory.pick, schema migration, packaging/tests/study notes together. No API harness yet. Native review disabled/unmanaged.
+- T2b commitb8c3233 on feat/local-fulfillment-lab-picking targeting orders child888149a;705 authored additions/deletions including tracker, running2937. Natural slice remains above400; no PR created, retain future slicing/exception requirement. No native review (disabled).
 - T2c contract: immutable Package(orderkey,packageID,positive exact integer weight_grams,length_mm,width_mm,height_mm,nonempty contents). Contents use full reservation identity and positive quantities; canonicalize and reject duplicate reservation entries within a package. AddPackage takes order lock, requires PICKED for new ID, validates cumulative quantities <= picked/reserved; identical payload retry no-op including after PACKED, conflicting ID payload rejects. FinishPacking requires exact per-reservation and order-line totals, moves PICKED->PACKED and is idempotent when PACKED. Multiple packages may split one reservation. PackingConfig owns quantity conservation; Order owns state guard, avoiding circular domain imports. No inventory packed-counter mutation, replacements/removals/carrier selection or partial-order completion. Package writes atomic under order lock; schema FKs enforce ownership. No unresolved product decision.
+- T2c closure (code authored by Codex, verified and committed by coordinator): atomic commits 02066da domain rules+PACKED transition (293 lines), 0b6e4c2 AddPackage persistence+migration 0004 (520), 15e391c FinishPacking+docs (290); 1103 authored, running 4040. Deviation: PACKED transition shipped in the domain commit and the migration status check in the persistence commit, because retry-after-PACKED proofs need both. Each commit independently green against real PostgreSQL: 182 / 212 / 221 passed (uv run pytest). Alembic 0004 upgrade/downgrade/upgrade verified on lab DB. Reordered FinishPacking to validate conservation before the state transition. Rollback: downgrade 0004 only with no packages/PACKED orders (guarded), then revert the three commits newest-first. Native review disabled/unmanaged; no push/PR. Known gap: AddPackage/FinishPacking have no fake-transaction application tests (covered via PostgreSQL only).
+- T2d contract: one persisted stable shipping attempt per owner/order with immutable package payload. Commit attempt before carrier call; never hold WMS DB transaction across carrier call. Timeout or lookup-unavailable leaves UNKNOWN, never new attempt. Reconcile first: confirmed receipt finalizes atomically; authoritative NOT_FOUND permits create with SAME attemptID/payload under a required idempotent carrier-port contract, allowing crash-before-call recovery. Fake carrier stores idempotency/result durably in independent SQL transactions/tables without WMS FKs, survives adapter restart; this does not claim real carriers guarantee idempotency. Validate exact package set/owner/order/attempt before finalization. Atomic order-level fake receipt only (no partial success). Finalization locks order then stock, decrements on_hand/allocated/picked once, retains historical reservation counts, transitions SHIPPED; legacy balance.packed remains non-authoritative/untouched. Calls/reconciliation repeated or concurrent cannot double-decrement or create a second shipment. No live carrier/network/hosted storage.
 
 ## Next action
-T1,T2a,T2b complete. Continue T2c packages and T2d shipping. Messaging/API/cache/projection/telemetry/final interview assets remain pending; do not infer full-lab completion.
+T1,T2a,T2b,T2c complete. Continue T2d shipping. Messaging/API/cache/projection/telemetry/final interview assets remain pending; do not infer full-lab completion.

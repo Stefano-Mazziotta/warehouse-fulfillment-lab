@@ -1,5 +1,3 @@
-"""One connection and row locks live until commit or rollback on context exit."""
-
 from types import TracebackType
 
 from sqlalchemy import Connection, Engine, select, update

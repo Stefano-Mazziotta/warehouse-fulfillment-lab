@@ -1,5 +1,3 @@
-"""Application-owned atomic write boundary, separate from read-only queries."""
-
 from types import TracebackType
 from typing import Protocol
 

@@ -8,7 +8,6 @@ from .order_transaction import OrderTransaction
 
 
 class GetOrder:
-    """Read an owner-scoped order without exposing persistence details."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

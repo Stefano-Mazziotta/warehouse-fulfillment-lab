@@ -1,6 +1,8 @@
 """Fresh READ COMMITTED transaction: order lock, then sorted stock locks."""
 
+from collections.abc import Mapping
 from types import TracebackType
+from typing import Any
 
 from sqlalchemy import Connection, Engine, Table, and_, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
@@ -14,6 +16,10 @@ from inventory.infrastructure.inventory_schema import (
 )
 from orders.domain import Order, OrderError, OrderKey, OrderLine, OrderStatus, Reservation
 
+from packing.domain.package import Package
+from packing.domain.package_item import PackageItem
+from packing.infrastructure.packing_schema import packages, package_items
+
 from .order_schema import order_lines, orders, reservations
 
 
@@ -21,8 +27,18 @@ def order_identity(table: Table, key: OrderKey) -> ColumnElement[bool]:
     return and_(table.c.client_id == key.client_id, table.c.order_id == key.order_id)
 
 
+def _package_item_from_row(key: OrderKey, row: Mapping[str, Any]) -> PackageItem:
+    stock_key = InventoryKey(row["client_id"], row["sku"], row["warehouse_id"], row["location_id"])
+    return PackageItem(key, row["line_id"], stock_key, row["quantity"])
+
+
+def _package_from_row(key: OrderKey, row: Mapping[str, Any],
+                      contents: tuple[PackageItem, ...]) -> Package:
+    return Package(key, row["package_id"], row["weight_grams"], row["length_mm"],
+                   row["width_mm"], row["height_mm"], contents)
+
+
 class PostgresOrderTransaction:
-    """Own connection lifetime; never commit inside an individual save."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -237,3 +253,29 @@ class PostgresOrderTransaction:
             .values(status=order.status.value)
         )
         self._connection().execute(statement)
+
+    def get_packages(self, key: OrderKey) -> tuple[Package, ...]:
+        headers = self._connection().execute(
+            select(packages).where(order_identity(packages, key))
+            .order_by(packages.c.package_id)).mappings()
+        contents = self._connection().execute(
+            select(package_items).where(order_identity(package_items, key))).mappings()
+        by_package: dict[str, list[PackageItem]] = {}
+        for row in contents:
+            by_package.setdefault(row["package_id"], []).append(_package_item_from_row(key, row))
+        return tuple(_package_from_row(key, row, tuple(by_package.get(row["package_id"], ())))
+                     for row in headers)
+
+    def add_package(self, package: Package) -> None:
+        if package.order_key not in self._locked_orders:
+            raise RuntimeError("Order must be locked before adding a package")
+        key = package.order_key
+        self._connection().execute(insert(packages).values(
+            client_id=key.client_id, order_id=key.order_id, package_id=package.package_id,
+            weight_grams=package.weight_grams, length_mm=package.length_mm,
+            width_mm=package.width_mm, height_mm=package.height_mm))
+        self._connection().execute(insert(package_items), [dict(
+            client_id=key.client_id, order_id=key.order_id, package_id=package.package_id,
+            line_id=item.line_id, warehouse_id=item.stock_key.warehouse_id,
+            sku=item.stock_key.sku, location_id=item.stock_key.location_id, quantity=item.quantity
+        ) for item in package.contents])

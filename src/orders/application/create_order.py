@@ -7,7 +7,6 @@ from .order_transaction import OrderTransaction
 
 
 class CreateOrder:
-    """Create a new immutable order or verify an identical request retry."""
 
     def __init__(
         self, transaction: Callable[[], AbstractContextManager[OrderTransaction]]

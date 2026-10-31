@@ -1,5 +1,3 @@
-"""SQL mapping mirrors the database constraints installed by Alembic."""
-
 from sqlalchemy import (
     CheckConstraint,
     Column,

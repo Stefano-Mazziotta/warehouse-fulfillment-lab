@@ -1,1 +1,1 @@
-"""Infrastructure implementations of inventory ports."""
+pass
