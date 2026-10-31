@@ -6,6 +6,8 @@ from inventory.domain import InventoryBalance, InventoryKey
 
 
 class InMemoryInventoryRepository:
+    """Read seeded balances from memory for local examples and tests."""
+
     def __init__(self, balances: Iterable[InventoryBalance] = ()) -> None:
         self._balances = {balance.key: balance for balance in balances}
 

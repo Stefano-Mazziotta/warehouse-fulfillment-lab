@@ -1,27 +1,13 @@
-"""Starter model for inventory balances.
+"""Stock quantities and the rules that keep a balance valid.
 
-This is deliberately incomplete: fill in the TODOs and be ready to explain
+Allocation, picking, packing, and shipping remain learning exercises. Define
 the consistency boundary before connecting this model to a database.
 """
 
 from dataclasses import dataclass, replace
 
-
-class InventoryError(ValueError):
-    """A requested inventory state or operation violates a domain rule."""
-
-
-@dataclass(frozen=True)
-class InventoryKey:
-    """Provisional stock scope: owner, product, warehouse and physical location.
-
-    The client is the inventory owner in a 3PL, not the end buyer.
-    """
-
-    client_id: str
-    sku: str
-    warehouse_id: str
-    location_id: str
+from .inventory_error import InventoryError
+from .inventory_key import InventoryKey
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from inventory.application.get_inventory import GetInventory, InventoryNotFound
+from inventory.application.inventory_not_found import InventoryNotFound
+from inventory.application.get_inventory import GetInventory
 from inventory.domain import InventoryBalance, InventoryKey
 
 

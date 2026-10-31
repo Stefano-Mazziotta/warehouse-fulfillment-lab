@@ -12,9 +12,14 @@ ROOT = Path(__file__).resolve().parents[2] / "src" / "inventory"
 
 @pytest.mark.parametrize(
     ("layer", "allowed_layers"),
-    [("domain", {"domain"}), ("application", {"domain", "application"})],
+    [
+        ("domain", {"domain"}),
+        ("application", {"domain", "application"}),
+        ("infrastructure", {"domain", "application", "infrastructure"}),
+    ],
 )
 def test_inner_layers_only_import_stdlib_and_inward_layers(layer, allowed_layers):
+    assert (ROOT / layer).is_dir()
     for source in (ROOT / layer).rglob("*.py"):
         module = ("inventory", *source.relative_to(ROOT).with_suffix("").parts)
         for node in ast.walk(ast.parse(source.read_text())):

@@ -2,14 +2,13 @@
 
 from inventory.domain import InventoryBalance, InventoryKey
 
-from .ports import InventoryRepository
-
-
-class InventoryNotFound(LookupError):
-    """No balance exists for the requested stock identity."""
+from .inventory_not_found import InventoryNotFound
+from .inventory_repository import InventoryRepository
 
 
 class GetInventory:
+    """Retrieve one balance or report that its stock identity was not found."""
+
     def __init__(self, repository: InventoryRepository) -> None:
         self._repository = repository
 
