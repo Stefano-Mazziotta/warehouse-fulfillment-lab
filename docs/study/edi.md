@@ -72,7 +72,10 @@ with a content hash or investigate gaps and repeats in the sequence.
 
 `read_interchange` refuses a file with no complete ISA header, no IEA trailer (the typical
 signature of a truncated transfer), a mismatched control number, no transaction set, or more than one (the reader takes one
-transaction per interchange and does not split batches; it also requires one matching ST/SE pair). The
+transaction per interchange and does not split batches; it also requires one matching ST/SE pair).
+The extractors only ever see the segments between that ST and SE: a business segment (for
+example a stray `W01`) before the ST or after the SE is refused, so data outside the declared
+transaction can never change quantities. The
 extractors refuse a missing order number, non-numeric or non-positive quantities, and zero
 SKU lines. Parsing and mapping run **before** any transaction opens, so a rejected file
 touches no state and leaves no half-applied order.

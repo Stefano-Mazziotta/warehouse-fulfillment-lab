@@ -126,3 +126,26 @@ def test_transaction_without_its_closing_se_is_refused():
         edi.receive(unclosed)
 
     assert store.orders == {} and store.inbox == set()
+
+
+def with_line_after(text, marker, extra="W01*9*EA**SK*EXTRA~"):
+    """Insert a business segment right after the first line starting with `marker`."""
+    lines = text.splitlines()
+    index = next(i for i, line in enumerate(lines) if line.startswith(marker))
+    return "\n".join(lines[:index + 1] + [extra] + lines[index + 1:]) + "\n"
+
+
+@pytest.mark.parametrize("marker", ["SE*", "GS*"], ids=["after-SE", "before-ST"])
+def test_business_segments_outside_the_transaction_are_refused_and_create_nothing(marker):
+    store, edi = intake()
+
+    with pytest.raises(EdiError, match="outside"):
+        edi.receive(with_line_after(fixture("940_warehouse_shipping_order.edi"), marker))
+
+    assert store.orders == {} and store.inbox == set()
+
+
+def test_only_the_transaction_body_is_mapped_into_the_order():
+    store, edi = intake()
+    edi.receive(fixture("940_warehouse_shipping_order.edi"))
+    assert [line.sku for line in store.orders[KEY].lines] == ["SKU-MUG-RED", "SKU-TEE-L"]

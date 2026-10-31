@@ -12,6 +12,9 @@ from dataclasses import dataclass
 ISA_LENGTH = 106
 ELEMENT_SEPARATOR_AT = 3
 TERMINATOR_AT = 105
+# Segments that may sit around the transaction. Anything else outside ST ... SE is business
+# data the mapper must never see, so it is refused instead of silently applied.
+ENVELOPE_TAGS = frozenset({"ISA", "GS", "GE", "IEA"})
 
 
 class EdiError(ValueError):
@@ -34,7 +37,7 @@ class Interchange:
     receiver_id: str
     control_number: str
     transaction_set: str
-    segments: tuple[Segment, ...]
+    segments: tuple[Segment, ...]  # the body between ST and SE only
 
     @property
     def idempotency_key(self) -> str:
@@ -78,10 +81,14 @@ def read_interchange(text: str) -> Interchange:
         raise EdiError("Transaction set is not closed by exactly one SE after its ST")
     if ends[0].element(2) != transaction.element(2):
         raise EdiError("SE control number does not match the ST header")
+    start, end = segments.index(transaction), segments.index(ends[0])
+    for stray in (*segments[:start], *segments[end + 1:]):
+        if stray.tag not in ENVELOPE_TAGS:
+            raise EdiError(f"Segment {stray.tag} appears outside the ST ... SE transaction")
     return Interchange(
         sender_id=isa.element(6).strip(),
         receiver_id=isa.element(8).strip(),
         control_number=isa.element(13),
         transaction_set=transaction.element(1),
-        segments=segments,
+        segments=segments[start + 1:end],
     )
