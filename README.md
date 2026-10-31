@@ -14,6 +14,9 @@ The lab now covers the whole fulfillment path for one owner-scoped order:
 - A Flask host exposing `POST /graphql`, `GET /health` and `POST /webhooks/sales-channel`, plus a
   guided API demo, failure drills, and JSON logs shipped to Grafana through Loki and Alloy.
 
+To see how the pieces fit, start with [System workflow in diagrams](docs/system-workflow.md):
+architecture, use cases, the order lifecycle and sequence diagrams for the main flows and failures.
+
 The sections below follow the learning progression, from one in-memory read to the full API.
 Setup for the optional services is in
 [Fresh machine: obtain the Docker images](#fresh-machine-obtain-the-docker-images).
@@ -26,6 +29,21 @@ With Python 3.11+ and [uv](https://docs.astral.sh/uv/) installed:
 uv sync
 uv run pytest
 ```
+
+### Local configuration
+
+Service URLs live in a git-ignored `.env`. Copy the template; its values match `compose.yaml`:
+
+```sh
+cp .env.example .env
+docker compose up -d --wait
+uv run --env-file .env alembic upgrade head
+uv run --env-file .env pytest -q       # service-backed, demo and drill tests now run too
+```
+
+The app never reads `.env` itself: load it with `uv run --env-file .env ...` or
+`set -a; source .env; set +a`. Setting `LAB_VALKEY_URL` turns the API's read cache on, so the
+template leaves it commented out.
 
 ## Follow one inventory read
 
@@ -319,6 +337,7 @@ See [the observability note](docs/study/observability.md).
 Start with the demo, break things with the drills, then use the last two to prepare for an
 interview. All are prediction-first: answer before you read the explanation.
 
+- [System workflow in diagrams](docs/system-workflow.md): architecture, use cases, order lifecycle and sequence diagrams (happy path, allocation race, outbox to projection, lost carrier response, webhooks, retries, cache).
 - [End-to-end demo](docs/demo.md): one scripted order from `CREATED` to `SHIPPED` through the API.
 - [Failure drills](docs/failure-drills.md): eight runnable failures (race, timeout, duplicates, crashes, outages).
 - [AWS map](docs/aws-map.md): each lab component mapped to AWS with trade-offs and sources. Reading only; nothing is deployed.
