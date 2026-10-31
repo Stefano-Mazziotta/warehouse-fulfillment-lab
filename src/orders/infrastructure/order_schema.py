@@ -19,7 +19,7 @@ orders = Table(
     Column("status", Text, nullable=False),
     UniqueConstraint("client_id", "order_id", "warehouse_id"),
     CheckConstraint(
-        "status IN ('CREATED', 'ALLOCATED', 'PICKING', 'PICKED', 'PACKED', 'CANCELLED')",
+        "status IN ('CREATED', 'ALLOCATED', 'PICKING', 'PICKED', 'PACKED', 'SHIPPED', 'CANCELLED')",
         name="valid_order_status",
     ),
 )

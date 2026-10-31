@@ -20,6 +20,10 @@ from packing.domain.package import Package
 from packing.domain.package_item import PackageItem
 from packing.infrastructure.packing_schema import packages, package_items
 
+from shipping.domain.shipment_status import ShipmentStatus
+from shipping.domain.shipping_attempt import ShippingAttempt
+from shipping.infrastructure.shipping_schema import shipping_attempt_packages, shipping_attempts
+
 from .order_schema import order_lines, orders, reservations
 
 
@@ -279,3 +283,37 @@ class PostgresOrderTransaction:
             line_id=item.line_id, warehouse_id=item.stock_key.warehouse_id,
             sku=item.stock_key.sku, location_id=item.stock_key.location_id, quantity=item.quantity
         ) for item in package.contents])
+
+    def get_attempt(self, key: OrderKey) -> ShippingAttempt | None:
+        row = self._connection().execute(
+            select(shipping_attempts).where(order_identity(shipping_attempts, key))
+        ).mappings().first()
+        if row is None:
+            return None
+        included = set(self._connection().execute(
+            select(shipping_attempt_packages.c.package_id)
+            .where(order_identity(shipping_attempt_packages, key))).scalars())
+        return ShippingAttempt(
+            key, row["attempt_id"],
+            tuple(p for p in self.get_packages(key) if p.package_id in included),
+            ShipmentStatus(row["status"]), row["tracking_number"])
+
+    def create_attempt(self, attempt: ShippingAttempt) -> None:
+        if attempt.order_key not in self._locked_orders:
+            raise RuntimeError("Order must be locked before creating an attempt")
+        key = attempt.order_key
+        self._connection().execute(insert(shipping_attempts).values(
+            client_id=key.client_id, order_id=key.order_id, attempt_id=attempt.attempt_id,
+            status=attempt.status.value, tracking_number=attempt.tracking_number))
+        self._connection().execute(insert(shipping_attempt_packages), [dict(
+            client_id=key.client_id, order_id=key.order_id, package_id=package.package_id
+        ) for package in attempt.packages])
+
+    def save_attempt(self, attempt: ShippingAttempt) -> None:
+        if attempt.order_key not in self._locked_orders:
+            raise RuntimeError("Order must be locked before saving an attempt")
+        # Only status and tracking change; the package payload is immutable.
+        self._connection().execute(
+            update(shipping_attempts)
+            .where(order_identity(shipping_attempts, attempt.order_key))
+            .values(status=attempt.status.value, tracking_number=attempt.tracking_number))

@@ -70,4 +70,14 @@ class InventoryBalance:
         raise NotImplementedError
 
     def ship(self, quantity: int) -> "InventoryBalance":
-        raise NotImplementedError
+        """Stock leaves the building; `packed` stays a legacy, non-authoritative count."""
+        if type(quantity) is not int or quantity <= 0:
+            raise InventoryError("shipped quantity must be a positive integer")
+        if quantity > self.picked:
+            raise InventoryError("cannot ship more than picked stock")
+        return replace(
+            self,
+            on_hand=self.on_hand - quantity,
+            allocated=self.allocated - quantity,
+            picked=self.picked - quantity,
+        )
