@@ -1,0 +1,76 @@
+{
+  "uid": "lab-backend-logs",
+  "title": "Backend logs",
+  "tags": ["lab"],
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Errors in the last 15 minutes",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "loki", "uid": "lab-loki" },
+      "targets": [{
+        "refId": "A",
+        "queryType": "instant",
+        "expr": "sum(count_over_time({service=\"backend\", level=~\"ERROR|CRITICAL\"}[15m]))"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Log volume by level",
+      "gridPos": { "x": 6, "y": 0, "w": 18, "h": 5 },
+      "datasource": { "type": "loki", "uid": "lab-loki" },
+      "targets": [{
+        "refId": "A",
+        "expr": "sum by (level) (count_over_time({service=\"backend\"}[$__auto]))",
+        "legendFormat": "{{level}}"
+      }],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" }, "fillOpacity": 60 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ERROR" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "WARNING" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "INFO" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Errors (traceback in the exception field)",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "lab-loki" },
+      "targets": [{
+        "refId": "A",
+        "expr": "{service=\"backend\", level=~\"ERROR|CRITICAL\"} | json"
+      }],
+      "options": { "showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "All backend logs",
+      "gridPos": { "x": 0, "y": 15, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "lab-loki" },
+      "targets": [{ "refId": "A", "expr": "{service=\"backend\"} | json" }],
+      "options": { "showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending" }
+    }
+  ]
+}

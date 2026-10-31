@@ -253,3 +253,29 @@ stand-in for authentication. Inventory is still seeded directly in SQL. The comm
 contract is `docs/api/schema.graphql`; regenerate it after an intentional change with
 `uv run python scripts/export_graphql_schema.py`. See
 [the API study note](docs/study/graphql-api.md).
+
+## Logs in Grafana (Loki and Alloy)
+
+The backend runs on the host and writes one JSON object per line to **stderr**; it knows
+nothing about Loki. The shell redirects stderr to `logs/backend.log`, Grafana Alloy tails
+that file through a bind mount and pushes to Loki, and Grafana reads Loki.
+
+```sh
+docker compose -p warehouse-fulfillment-lab up -d --wait loki alloy grafana   # logs/ ships in the repo
+export LAB_DATABASE_URL=postgresql+psycopg://lab:lab@127.0.0.1:55432/warehouse_lab
+uv run flask --app 'api.app_factory:create_app_from_environment' run --port 5000 2>> logs/backend.log
+# in other terminals (LAB_AMQP_URL and LAB_DYNAMODB_URL as in the projection note):
+uv run python -m orders.infrastructure.order_projection_cli run 2>> logs/backend.log
+```
+
+- Grafana: <http://127.0.0.1:53000> (user `lab`, password `lab-grafana`, lab only), dashboard
+  "Backend logs". Loki API: `127.0.0.1:53100`. Alloy UI: `127.0.0.1:52345`.
+- `LAB_LOG_LEVEL` (default `INFO`) sets the level. Every API response carries `X-Request-Id`
+  (the caller's when it is 1 to 64 characters of `A-Za-z0-9._-`, otherwise generated); consumer lines
+  carry `event_id`, `event_type` and `queue`.
+- `scripts/smoke_observability.sh` runs the API, forces an unhandled error and finds the line
+  in Loki. `LAB_TEST_LOKI_URL=http://127.0.0.1:53100 uv run pytest tests/observability` does
+  the same check for the file-to-Loki leg only.
+- Truncate with `: > logs/backend.log` only while Alloy is stopped; rotation is not handled.
+
+See [the observability note](docs/study/observability.md).

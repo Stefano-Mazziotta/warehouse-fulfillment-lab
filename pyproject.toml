@@ -9,18 +9,20 @@ description = "A domain-first warehouse fulfillment learning lab"
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.14,<2",
+    "boto3>=1.43,<2",
     "flask[async]>=3.1,<4",
     "pika>=1.3,<2",
     "psycopg[binary]>=3.2,<4",
     "sqlalchemy>=2.0,<2.1",
     "strawberry-graphql>=0.280,<1",
+    "valkey>=6,<7",
 ]
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/inventory", "src/orders", "src/picking", "src/packing", "src/shipping", "src/messaging", "src/integrations", "src/api"]
+packages = ["src/inventory", "src/orders", "src/picking", "src/packing", "src/shipping", "src/messaging", "src/integrations", "src/api", "src/observability"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

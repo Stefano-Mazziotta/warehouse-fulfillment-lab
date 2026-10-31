@@ -1,0 +1,191 @@
+from datetime import datetime, timezone
+
+import pytest
+
+from integrations.edi.advice_check import MismatchCode, reconcile_advice
+from integrations.edi.advice_writer import write_856, write_945
+from integrations.edi.documents import read_ship_advice
+from integrations.edi.x12 import EdiError, read_interchange
+from inventory.domain import InventoryKey
+from orders.domain import Order, OrderKey, OrderLine, OrderStatus
+from packing.domain.package import Package
+from packing.domain.package_item import PackageItem
+from shipping.domain.carrier_receipt import CarrierReceipt
+from shipping.domain.shipping_attempt import ShippingAttempt
+
+from edi_support import fixture
+
+KEY = OrderKey("ACMEBRANDS", "SO-1001")
+SENT_AT = datetime(2026, 10, 2, 13, 30, tzinfo=timezone.utc)
+
+
+def box(package_id, line_id, sku, quantity):
+    stock = InventoryKey("ACMEBRANDS", sku, "WH-EAST", "A1")
+    return Package(KEY, package_id, 100, 200, 150, 100, (PackageItem(KEY, line_id, stock, quantity),))
+
+
+def order(status=OrderStatus.SHIPPED):
+    return Order(KEY, "WH-EAST", (OrderLine("1", "SKU-MUG-RED", 2), OrderLine("2", "SKU-TEE-L", 1)), status)
+
+
+def opened():
+    return ShippingAttempt.open(KEY, (box("box-1", "1", "SKU-MUG-RED", 2), box("box-2", "2", "SKU-TEE-L", 1)))
+
+
+def shipped(tracking="TRK-000123"):
+    attempt = opened()
+    return attempt.confirm(CarrierReceipt(KEY, attempt.attempt_id, attempt.package_ids, tracking))
+
+
+def test_945_derived_from_shipped_order_matches_the_sample_file():
+    text = write_945(order(), shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                     control_number=303, sent_at=SENT_AT)
+
+    assert text == fixture("945_warehouse_shipping_advice.edi")
+
+
+def test_856_derived_from_shipped_order_matches_the_sample_file():
+    text = write_856(order(), shipped(), ship_to="Jane Example Store 12", customer_po="PO-4500012345",
+                     sender="ACMEBRANDS", receiver="RETAILCO", control_number=404, sent_at=SENT_AT)
+
+    assert text == fixture("856_advance_ship_notice.edi")
+
+
+def test_derived_documents_survive_the_reader_round_trip():
+    attempt = shipped()
+    text = write_945(order(), attempt, sender="LABWMS", receiver="ACMEBRANDS",
+                     control_number=7, sent_at=SENT_AT)
+
+    advice = read_ship_advice(read_interchange(text))
+
+    assert (advice.order_number, advice.shipment_id) == ("SO-1001", attempt.attempt_id)
+    assert reconcile_advice(advice, attempt) == ()
+
+
+@pytest.mark.parametrize("attempt", [opened(), opened().mark_unknown()])
+def test_no_advice_is_written_for_a_shipment_that_has_not_happened(attempt):
+    with pytest.raises(EdiError, match="SHIPPED"):
+        write_945(order(OrderStatus.PACKED), attempt, sender="LABWMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+
+
+def inbound_945():
+    return read_ship_advice(read_interchange(fixture("945_warehouse_shipping_advice.edi")))
+
+
+def test_945_for_an_order_we_never_shipped_is_a_mismatch_not_an_acceptance():
+    mismatches = reconcile_advice(inbound_945(), None)
+
+    assert [m.code for m in mismatches] == [MismatchCode.NOT_SHIPPED]
+
+
+def test_945_for_an_attempt_still_unknown_is_a_mismatch():
+    mismatches = reconcile_advice(inbound_945(), opened().mark_unknown())
+
+    assert [m.code for m in mismatches] == [MismatchCode.NOT_SHIPPED]
+
+
+def test_matching_advice_reconciles_cleanly():
+    assert reconcile_advice(inbound_945(), shipped()) == ()
+
+
+def test_each_disagreement_is_reported_separately():
+    other_tracking = reconcile_advice(inbound_945(), shipped("TRK-999999"))
+    assert [m.code for m in other_tracking] == [MismatchCode.TRACKING_DIFFERS]
+
+    short = inbound_945().__class__(
+        "945", "SO-1001", "other-shipment", ("TRK-000123",), inbound_945().lines[:1])
+    codes = {m.code for m in reconcile_advice(short, shipped())}
+    assert codes == {MismatchCode.SHIPMENT_ID_DIFFERS, MismatchCode.QUANTITY_DIFFERS}
+
+
+def partially_shipped():
+    attempt = ShippingAttempt.open(KEY, (box("box-1", "1", "SKU-MUG-RED", 2),))
+    return attempt.confirm(CarrierReceipt(KEY, attempt.attempt_id, attempt.package_ids, "TRK-000123"))
+
+
+def partial_945():
+    return write_945(order(), partially_shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                     control_number=9, sent_at=SENT_AT)
+
+
+def test_partial_shipment_945_is_readable_with_a_zero_shipped_line():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert {line.sku: line.quantity for line in advice.lines} == {"SKU-MUG-RED": 2, "SKU-TEE-L": 0}
+
+
+def test_faithful_partial_945_reconciles_cleanly_against_the_partial_attempt():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert reconcile_advice(advice, partially_shipped()) == ()
+
+
+def test_partial_945_against_a_complete_shipment_is_a_quantity_mismatch():
+    advice = read_ship_advice(read_interchange(partial_945()))
+
+    assert [m.code for m in reconcile_advice(advice, shipped())] == [MismatchCode.QUANTITY_DIFFERS]
+
+
+@pytest.mark.parametrize("shipped_quantity", ["-1", "two", ""])
+def test_negative_or_non_numeric_shipped_quantity_is_still_rejected(shipped_quantity):
+    text = partial_945().replace("*0*1*EA", f"*{shipped_quantity}*1*EA")
+
+    with pytest.raises(EdiError, match="Invalid quantity"):
+        read_ship_advice(read_interchange(text))
+
+
+@pytest.mark.parametrize("sender, receiver", [("S" * 16, "ACMEBRANDS"), ("LABWMS", "R" * 16)])
+@pytest.mark.parametrize("write", ["945", "856"])
+def test_ids_wider_than_the_fixed_width_isa_fields_are_refused(write, sender, receiver):
+    with pytest.raises(EdiError, match="15"):
+        if write == "945":
+            write_945(order(), shipped(), sender=sender, receiver=receiver,
+                      control_number=1, sent_at=SENT_AT)
+        else:
+            write_856(order(), shipped(), ship_to="X", customer_po="PO", sender=sender,
+                      receiver=receiver, control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("bad", ["PO~N1*ST*INJECTED", "A*B", "A>B", "A\nB"])
+def test_856_rejects_reserved_delimiters_in_data_elements(bad):
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(), ship_to=bad, customer_po="PO-1",
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(), ship_to="Store", customer_po=bad,
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("bad", ["TRK~1", "TRK*1"])
+def test_945_and_856_reject_reserved_delimiters_in_tracking(bad):
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(order(), shipped(bad), sender="LABWMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+    with pytest.raises(EdiError, match="reserved"):
+        write_856(order(), shipped(bad), ship_to="Store", customer_po="PO-1",
+                  sender="ACMEBRANDS", receiver="RETAILCO", control_number=1, sent_at=SENT_AT)
+
+
+def test_945_rejects_reserved_delimiters_in_sender_and_sku():
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(order(), shipped(), sender="LAB*WMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+    risky = Order(KEY, "WH-EAST", (OrderLine("1", "SKU~X", 2), OrderLine("2", "SKU-TEE-L", 1)), OrderStatus.SHIPPED)
+    with pytest.raises(EdiError, match="reserved"):
+        write_945(risky, shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                  control_number=1, sent_at=SENT_AT)
+
+
+@pytest.mark.parametrize("other", [OrderKey("OTHER", "SO-1001"), OrderKey("ACMEBRANDS", "NEVER-SHIPPED")])
+@pytest.mark.parametrize("write", ["945", "856"])
+def test_advice_is_refused_when_the_order_does_not_own_the_shipped_attempt(write, other):
+    foreign = Order(other, "WH-EAST", (OrderLine("1", "SKU-MUG-RED", 2),), OrderStatus.CREATED)
+
+    with pytest.raises(EdiError, match="does not belong"):
+        if write == "945":
+            write_945(foreign, shipped(), sender="LABWMS", receiver="ACMEBRANDS",
+                      control_number=1, sent_at=SENT_AT)
+        else:
+            write_856(foreign, shipped(), ship_to="X", customer_po="PO", sender="ACMEBRANDS",
+                      receiver="RETAILCO", control_number=1, sent_at=SENT_AT)

@@ -31,6 +31,84 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    pull_policy: never
+    # A cache, not a database: no persistence, so a restart is also an outage drill.
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.4
+    pull_policy: never
+    # A read-model projection, not a database of record: in-memory, so a restart wipes it and
+    # the rebuild command brings it back from the PostgreSQL outbox.
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "127.0.0.1:58000:8000"
+    healthcheck:
+      # The image ships no curl; bash can still open a TCP connection.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  loki:
+    image: grafana/loki:3.5.5
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "127.0.0.1:53100:3100"
+    volumes:
+      - ./observability/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3100/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  alloy:
+    image: grafana/alloy:v1.11.0
+    # Reads logs/backend.log (the host-run backend's stderr) and pushes to Loki. The UI at
+    # http://127.0.0.1:52345 shows whether the file is being tailed.
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:52345:12345"
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/logs:ro
+      # Remembers how far the file was read, so a restart does not re-ship the whole log.
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_healthy
+  grafana:
+    image: grafana/grafana:12.2.0
+    environment:
+      # Lab-only credentials on a loopback port; never reuse them anywhere real.
+      GF_SECURITY_ADMIN_USER: lab
+      GF_SECURITY_ADMIN_PASSWORD: lab-grafana
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:53000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      loki:
+        condition: service_healthy
 volumes:
   postgres-data:
   rabbitmq-data:
+  loki-data:
+  alloy-data:

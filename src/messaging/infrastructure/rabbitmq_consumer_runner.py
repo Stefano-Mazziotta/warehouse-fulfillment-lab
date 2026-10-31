@@ -1,9 +1,11 @@
+import logging
 from collections.abc import Callable
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 
 from messaging.application.idempotent_consumer import IdempotentConsumer
+from observability.log_context import log_context
 
 from .rabbitmq_connection import connection_parameters
 from .rabbitmq_message import decode
@@ -11,6 +13,8 @@ from .rabbitmq_topology import RabbitMqTopology
 
 ATTEMPT_HEADER = "x-attempt"
 ERROR_HEADER = "x-last-error"
+
+logger = logging.getLogger("messaging.consumer")
 
 
 class RabbitMqConsumerRunner:
@@ -83,33 +87,43 @@ class RabbitMqConsumerRunner:
             channel, self._queue, self._routing_keys, self._retry_delay_ms)
 
     def _process(self, channel: BlockingChannel, delivery_tag: int, properties, body: bytes) -> None:
-        headers = properties.headers or {}
-        previous_attempts = headers.get(ATTEMPT_HEADER, 0)
-        if type(previous_attempts) is not int or previous_attempts < 0:
-            # Retry metadata we did not write: no redelivery can repair it either.
-            self._republish(channel, self._topology.dead_letter_queue(self._queue), properties, body,
-                            attempt=0, error=f"invalid {ATTEMPT_HEADER} header: {previous_attempts!r}")
-            channel.basic_ack(delivery_tag)
-            return
-        try:
-            message = decode(body)
-        except (ValueError, KeyError, TypeError) as error:
-            # No redelivery can repair a body we cannot read: park it for a human.
-            self._republish(channel, self._topology.dead_letter_queue(self._queue), properties, body,
-                            attempt=0, error=f"undecodable: {error}")
-        else:
+        # Ids only, never the body: payloads carry business data. The broker's message_id is the outbox id.
+        with log_context(queue=self._queue, event_id=properties.message_id):
+            previous_attempts = (properties.headers or {}).get(ATTEMPT_HEADER, 0)
+            if type(previous_attempts) is not int or previous_attempts < 0:
+                # Retry metadata we did not write: no redelivery can repair it either.
+                logger.error("invalid retry metadata; dead-lettering",
+                             extra={"decision": "dead_letter", "attempt": 0})
+                self._republish(channel, self._topology.dead_letter_queue(self._queue), properties, body,
+                                attempt=0, error=f"invalid {ATTEMPT_HEADER} header: {previous_attempts!r}")
+                channel.basic_ack(delivery_tag)
+                return
             try:
-                self._consumer.handle(message)  # returns only after the transaction committed
-            except Exception as error:
-                self._fail(channel, properties, body, error)
-        channel.basic_ack(delivery_tag)
+                message = decode(body)
+            except (ValueError, KeyError, TypeError) as error:
+                # No redelivery can repair a body we cannot read: park it for a human.
+                logger.error("message cannot be decoded; dead-lettering",
+                             extra={"decision": "dead_letter", "attempt": 0, "error_type": type(error).__name__})
+                self._republish(channel, self._topology.dead_letter_queue(self._queue), properties, body,
+                                attempt=0, error=f"undecodable: {error}")
+            else:
+                with log_context(event_type=message.event_type):
+                    try:
+                        self._consumer.handle(message)  # returns only after the transaction committed
+                    except Exception as error:
+                        self._fail(channel, properties, body, error)
+            channel.basic_ack(delivery_tag)
 
     def _fail(self, channel: BlockingChannel, properties, body: bytes, error: Exception) -> None:
         attempt = (properties.headers or {}).get(ATTEMPT_HEADER, 0) + 1  # validated in _process
         if attempt >= self._max_attempts:
             target = self._topology.dead_letter_queue(self._queue)
+            logger.error("handler failed; dead-lettering", exc_info=error,
+                         extra={"decision": "dead_letter", "attempt": attempt})
         else:
             target = self._topology.retry_queue(self._queue)
+            logger.warning("handler failed; will retry", exc_info=error,
+                           extra={"decision": "retry", "attempt": attempt})
         self._republish(channel, target, properties, body, attempt, f"{type(error).__name__}: {error}")
 
     def _republish(

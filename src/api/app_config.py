@@ -16,10 +16,15 @@ class AppConfig:
     max_request_bytes: int = 1_000_000
     # The fake carrier lives outside Alembic; this creates its tables when missing.
     install_lab_fakes: bool = True
+    # Unset means no cache at all: every read goes to PostgreSQL.
+    valkey_url: str | None = None
+    # Upper bound of staleness when an invalidation is lost (outage, race, another process).
+    cache_ttl_seconds: int = 30
+    cache_key_prefix: str = "lab:order-summary:"
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> "AppConfig":
         url = environ.get("LAB_DATABASE_URL")
         if not url:
             raise RuntimeError("Set LAB_DATABASE_URL to the lab PostgreSQL URL")
-        return cls(database_url=url)
+        return cls(database_url=url, valkey_url=environ.get("LAB_VALKEY_URL") or None)
